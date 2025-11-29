@@ -1,4 +1,4 @@
-# Time Machine Manager Pro
+# Time Machine Manager
 
 A modern macOS application for managing Time Machine local snapshots with a native SwiftUI interface.
 
