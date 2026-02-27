@@ -10,7 +10,7 @@ I work primarily in the Apple ecosystem, with a focus on scripting, automation, 
 - Experimenting with GMRS radio programming and other technical hobbies
 - Writing clear, audience‑focused documentation to make complex systems approachable
 
-I approach projects as opportunities to learn, test, and share— not to show off. This space reflects curiosity more than polished products.
+I approach projects as opportunities to learn, test, and share. This space reflects curiosity more than polished products.
 
 ## Projects
 
@@ -18,7 +18,6 @@ Here’s what you’ll typically see in my repositories:
 - **Exploratory scripts**: Bash, Swift, and Python snippets that probe macOS behaviors or streamline admin tasks.
 - **Automation experiments**: Workflows that integrate with tools like Jamf Pro, SentinelOne, or clipboard managers.
 - **Text utilities**: Methods for cleaning, formatting, and standardizing documentation.
-- **Radio programming configs**: GMRS setups for local networks, often shared for reference.
 - **Conceptual prototypes**: Early scaffolds for larger ideas, like plugin systems or orchestration layers.
 
 Each project is documented with enough context to be useful, but the emphasis is on exploration rather than production‑ready polish.
