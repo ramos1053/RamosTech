@@ -11,14 +11,19 @@ struct ToiletDataService {
         let north = coord.latitude  + radiusDegrees
         let west  = coord.longitude - radiusDegrees
         let east  = coord.longitude + radiusDegrees
+        let bb = "\(south),\(west),\(north),\(east)"
 
+        // Query 1: dedicated toilet facilities (highest priority)
+        // Query 2: any venue (gas station, hotel, restaurant, shop, park…) tagged toilets=yes
         let query = """
-        [out:json][timeout:20];
+        [out:json][timeout:30];
         (
-          node["amenity"="toilets"](\(south),\(west),\(north),\(east));
-          way["amenity"="toilets"](\(south),\(west),\(north),\(east));
+          node["amenity"="toilets"](\(bb));
+          way["amenity"="toilets"](\(bb));
+          node["toilets"="yes"](\(bb));
+          way["toilets"="yes"](\(bb));
         );
-        out center 50;
+        out center 100;
         """
 
         guard let url = URL(string: "https://overpass-api.de/api/interpreter") else { return [] }
@@ -26,7 +31,7 @@ struct ToiletDataService {
         request.httpMethod  = "POST"
         request.httpBody    = ("data=" + (query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""))
             .data(using: .utf8)
-        request.timeoutInterval = 25
+        request.timeoutInterval = 35
 
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
@@ -198,13 +203,31 @@ struct ToiletDataService {
         }
 
         let tags = el.tags ?? [:]
-        let name = tags["name"] ?? tags["description"] ?? "Public Toilet"
+        let amenity = tags["amenity"] ?? ""
+        let isDedicatedToilet = amenity == "toilets"
+
+        // Map OSM tags → BathroomType + purchase requirement
+        let (bathroomType, requiresPurchase): (BathroomType, Bool) = isDedicatedToilet
+            ? (.publicFacility, false)
+            : osmVenueType(tags: tags)
+
+        // Build a descriptive name: venues get " – Restroom" suffix
+        let name: String
+        if isDedicatedToilet {
+            name = tags["name"] ?? tags["description"] ?? "Public Toilet"
+        } else {
+            if let venueName = tags["name"], !venueName.trimmingCharacters(in: .whitespaces).isEmpty {
+                name = "\(venueName) – Restroom"
+            } else {
+                name = "\(bathroomType.displayName) Restroom"
+            }
+        }
 
         let fee: FeeType = {
             switch tags["fee"] {
             case "no", "free": return .free
             case "yes":        return .paid
-            default:           return .unknown
+            default:           return isDedicatedToilet ? .unknown : .free
             }
         }()
 
@@ -212,12 +235,15 @@ struct ToiletDataService {
         let genderNeutral = tags["unisex"] == "yes"
         let hours         = tags["opening_hours"] ?? ""
         let access        = tags["access"] ?? ""
-        let notes         = access.isEmpty ? "" : "Access: \(access)"
+        var notes         = access.isEmpty ? "" : "Access: \(access)"
+        if requiresPurchase {
+            notes = notes.isEmpty ? "May require a purchase." : notes + " May require a purchase."
+        }
 
         // Deterministic UUID: prefix "4F534D30" = "OSM0" in ASCII hex
-        let idHex  = String(format: "%012X", el.id)
+        let idHex   = String(format: "%012X", el.id)
         let uuidStr = "4F534D30-0000-4000-8000-\(idHex)"
-        let id = UUID(uuidString: uuidStr) ?? UUID()
+        let id      = UUID(uuidString: uuidStr) ?? UUID()
 
         return Bathroom(
             id: id,
@@ -225,11 +251,11 @@ struct ToiletDataService {
             address: "",
             latitude: lat,
             longitude: lon,
-            type: .publicFacility,
+            type: bathroomType,
             fee: fee,
             isAccessible: accessible,
             isGenderNeutral: genderNeutral,
-            requiresPurchase: false,
+            requiresPurchase: requiresPurchase,
             accessCode: nil,
             notes: notes,
             hours: hours,
@@ -238,6 +264,59 @@ struct ToiletDataService {
             isFavorite: false,
             reviews: []
         )
+    }
+
+    /// Maps OSM tags to the best-fit BathroomType and whether a purchase is likely required.
+    private static func osmVenueType(tags: [String: String]) -> (BathroomType, Bool) {
+        let amenity = tags["amenity"] ?? ""
+        let tourism  = tags["tourism"] ?? ""
+        let shop     = tags["shop"] ?? ""
+        let leisure  = tags["leisure"] ?? ""
+
+        switch amenity {
+        // Gas / fuel stations
+        case "fuel":
+            return (.gasStation, false)
+        // Food & drink — toilet access often requires purchase
+        case "restaurant", "fast_food", "cafe", "bar",
+             "pub", "food_court", "biergarten", "ice_cream":
+            return (.restaurant, true)
+        // Public-service buildings — free access
+        case "hospital", "clinic", "doctors", "pharmacy", "dentist",
+             "library", "community_centre", "arts_centre",
+             "theatre", "cinema", "place_of_worship",
+             "ferry_terminal", "bus_station", "airport":
+            return (.publicFacility, false)
+        // Shopping complexes
+        case "shopping_mall":
+            return (.store, false)
+        case "supermarket", "convenience":
+            return (.store, true)
+        default:
+            break
+        }
+        // Accommodation
+        switch tourism {
+        case "hotel", "motel", "hostel", "guest_house",
+             "apartment", "chalet", "camp_site":
+            return (.hotel, false)
+        default:
+            break
+        }
+        // Retail shops
+        if !shop.isEmpty { return (.store, true) }
+        // Outdoor / leisure
+        switch leisure {
+        case "park", "recreation_ground", "garden", "nature_reserve",
+             "dog_park", "playground":
+            return (.park, false)
+        case "sports_centre", "stadium", "fitness_centre",
+             "swimming_pool", "golf_course":
+            return (.publicFacility, false)
+        default:
+            break
+        }
+        return (.other, false)
     }
 
     private static func refugeToBathroom(_ entry: RefugeEntry) -> Bathroom? {
