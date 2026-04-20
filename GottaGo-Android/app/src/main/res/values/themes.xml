@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme. Material3 dynamicColor is applied in Compose; this is just a shell. -->
+    <style name="Theme.GottaGo" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
