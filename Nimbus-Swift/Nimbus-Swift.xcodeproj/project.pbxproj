@@ -1,0 +1,388 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		14E7718DA6664A418016DFB1 /* ServerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07310AB096794A5498D3937B /* ServerViewModel.swift */; };
+		2B98570D9E77427086AD2AA9 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A8DBD728A0440649312A556 /* PreferencesView.swift */; };
+		5DB1EBB218634DE0BBFDC573 /* AppPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7063C272AAAC43D39AE60695 /* AppPreferences.swift */; };
+		704BF75B6CCA4288B1E4B25C /* NimbusSwiftApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F018F7D3AC654CE293A5B35F /* NimbusSwiftApp.swift */; };
+		7605E824499E4EE5A977D217 /* ShellExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE5F3F6085DA4C9795A47E48 /* ShellExecutor.swift */; };
+		8382690E1E4E42C3B9D44FAC /* SystemMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9884B259458E409ABAC16FAF /* SystemMetrics.swift */; };
+		843C1BF326AD41B0937D52C1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 318F36F3E5B54A3C9377AE29 /* Assets.xcassets */; };
+		AFB7DA96261448DD8E080646 /* MetricsGraphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9E82AC4998A4A12AEE7BD55 /* MetricsGraphView.swift */; };
+		BBD8D5491A3F405AA8A41FEA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11262E241FE64405A9D6D276 /* ContentView.swift */; };
+		C33D9AEB6DAE4F25AFC1593E /* PreferencesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D7C00EC3664C878667F1C9 /* PreferencesManager.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		07310AB096794A5498D3937B /* ServerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerViewModel.swift; sourceTree = "<group>"; };
+		11262E241FE64405A9D6D276 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		20D7C00EC3664C878667F1C9 /* PreferencesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesManager.swift; sourceTree = "<group>"; };
+		2A8DBD728A0440649312A556 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		318F36F3E5B54A3C9377AE29 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7063C272AAAC43D39AE60695 /* AppPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
+		9884B259458E409ABAC16FAF /* SystemMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMetrics.swift; sourceTree = "<group>"; };
+		B3E4FBC3AA6B4D3DA52BD278 /* Nimbus_Swift.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Nimbus_Swift.entitlements; sourceTree = "<group>"; };
+		CE5F3F6085DA4C9795A47E48 /* ShellExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellExecutor.swift; sourceTree = "<group>"; };
+		D8B1667416574ABCBA025C38 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E9452A1CE80849DBABC9BFEA /* Nimbus-Swift.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nimbus-Swift.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F018F7D3AC654CE293A5B35F /* NimbusSwiftApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NimbusSwiftApp.swift; sourceTree = "<group>"; };
+		F9E82AC4998A4A12AEE7BD55 /* MetricsGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsGraphView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		687532FF2CE94FEEA568E8CF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0019C59EBF6640BBB5B9EB87 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E9452A1CE80849DBABC9BFEA /* Nimbus-Swift.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0A1016B338F144069F2EB8E1 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				11262E241FE64405A9D6D276 /* ContentView.swift */,
+				2A8DBD728A0440649312A556 /* PreferencesView.swift */,
+				F9E82AC4998A4A12AEE7BD55 /* MetricsGraphView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		0F66C247C4094DFE81208DA3 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				CE5F3F6085DA4C9795A47E48 /* ShellExecutor.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		472714B4903843C59388659E /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				20D7C00EC3664C878667F1C9 /* PreferencesManager.swift */,
+				07310AB096794A5498D3937B /* ServerViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		49AA6925DAF04167AF44D062 = {
+			isa = PBXGroup;
+			children = (
+				49AA6925DAF04167AF44D062001 /* Nimbus-Swift */,
+				0019C59EBF6640BBB5B9EB87 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		49AA6925DAF04167AF44D062001 /* Nimbus-Swift */ = {
+			isa = PBXGroup;
+			children = (
+				F018F7D3AC654CE293A5B35F /* NimbusSwiftApp.swift */,
+				842C9ED1C388454485451465 /* Models */,
+				472714B4903843C59388659E /* ViewModels */,
+				0A1016B338F144069F2EB8E1 /* Views */,
+				0F66C247C4094DFE81208DA3 /* Utilities */,
+				99AC1224C92B45B290091A10 /* Resources */,
+				D8B1667416574ABCBA025C38 /* Info.plist */,
+				B3E4FBC3AA6B4D3DA52BD278 /* Nimbus_Swift.entitlements */,
+			);
+			path = "Nimbus-Swift";
+			sourceTree = "<group>";
+		};
+		842C9ED1C388454485451465 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				7063C272AAAC43D39AE60695 /* AppPreferences.swift */,
+				9884B259458E409ABAC16FAF /* SystemMetrics.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		99AC1224C92B45B290091A10 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				318F36F3E5B54A3C9377AE29 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		11F11930EBD54151A7C14A8B /* Nimbus-Swift */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6246FA36B763411BB0BFB327 /* Build configuration list for PBXNativeTarget "Nimbus-Swift" */;
+			buildPhases = (
+				6EEBC4641047452D9833F116 /* Sources */,
+				687532FF2CE94FEEA568E8CF /* Frameworks */,
+				BA8076E62DD742B4831A1012 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Nimbus-Swift";
+			productName = "Nimbus-Swift";
+			productReference = E9452A1CE80849DBABC9BFEA /* Nimbus-Swift.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		073E51016EF54199BE218E55 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+			};
+			buildConfigurationList = 92730E50E60A468794D43223 /* Build configuration list for PBXProject "Nimbus-Swift" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 49AA6925DAF04167AF44D062;
+			productRefGroup = 0019C59EBF6640BBB5B9EB87 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				11F11930EBD54151A7C14A8B /* Nimbus-Swift */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		BA8076E62DD742B4831A1012 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				843C1BF326AD41B0937D52C1 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6EEBC4641047452D9833F116 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				704BF75B6CCA4288B1E4B25C /* NimbusSwiftApp.swift in Sources */,
+				BBD8D5491A3F405AA8A41FEA /* ContentView.swift in Sources */,
+				2B98570D9E77427086AD2AA9 /* PreferencesView.swift in Sources */,
+				AFB7DA96261448DD8E080646 /* MetricsGraphView.swift in Sources */,
+				5DB1EBB218634DE0BBFDC573 /* AppPreferences.swift in Sources */,
+				8382690E1E4E42C3B9D44FAC /* SystemMetrics.swift in Sources */,
+				C33D9AEB6DAE4F25AFC1593E /* PreferencesManager.swift in Sources */,
+				14E7718DA6664A418016DFB1 /* ServerViewModel.swift in Sources */,
+				7605E824499E4EE5A977D217 /* ShellExecutor.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		3352C222934E47E6AC0390B9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Nimbus-Swift/Nimbus_Swift.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = Z3JPM67YW9;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Nimbus-Swift/Info.plist";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ramostech.nimbus-swift";
+				PRODUCT_NAME = "Nimbus-Swift";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		4A89CEFF686A4997A6E0F5FE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		4DC1736742C745E7A6911F8D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		D63D6643ACA945B7A95F74A2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Nimbus-Swift/Nimbus_Swift.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = Z3JPM67YW9;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Nimbus-Swift/Info.plist";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MARKETING_VERSION = 3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ramostech.nimbus-swift";
+				PRODUCT_NAME = "Nimbus-Swift";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6246FA36B763411BB0BFB327 /* Build configuration list for PBXNativeTarget "Nimbus-Swift" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D63D6643ACA945B7A95F74A2 /* Debug */,
+				3352C222934E47E6AC0390B9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		92730E50E60A468794D43223 /* Build configuration list for PBXProject "Nimbus-Swift" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4A89CEFF686A4997A6E0F5FE /* Debug */,
+				4DC1736742C745E7A6911F8D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 073E51016EF54199BE218E55 /* Project object */;
+}
