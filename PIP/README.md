@@ -224,11 +224,21 @@ PIPBenchmarks/
 └── PieceTableBenchmarks.swift    # Performance benchmarks
 ```
 
-## Building
+## Building from Source
+
+### Code Signing (required before first build)
+
+1. Open `PIP.xcodeproj` in Xcode
+2. Click the project in the Navigator → select the **PIP** target
+3. Go to **Signing & Capabilities**
+4. Set **Team** to your own Apple developer account (or "None / Sign to Run Locally" for ad-hoc)
+5. Optionally update **Bundle Identifier** (e.g. `com.yourname.PIP`)
+
+### Build and run
 
 1. Open `PIP.xcodeproj` in Xcode 15.4+
-2. Select the PIP scheme
-3. Build and run (⌘R)
+2. Select the **PIP** scheme and **My Mac** as the destination
+3. Press **⌘R** to build and run
 
 **Requirements:**
 - macOS 14.0+
