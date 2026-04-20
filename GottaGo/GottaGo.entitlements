@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- iCloud Key-Value Storage: requires a paid Apple Developer account.
+	     To enable:
+	     1. Sign in to developer.apple.com → Identifiers
+	     2. Register explicit App ID: com.gottago.app
+	     3. Edit it → enable "iCloud" → check "iCloud Key-Value Storage"
+	     4. Save. Xcode Automatic signing will regenerate the provisioning profile.
+	     5. Uncomment the two lines below and rebuild.
+	-->
+	<!-- <key>com.apple.developer.ubiquity-kvstore-identifier</key> -->
+	<!-- <string>$(TeamIdentifierPrefix)com.gottago.app</string> -->
+</dict>
+</plist>
