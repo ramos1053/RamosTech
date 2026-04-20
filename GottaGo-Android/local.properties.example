@@ -1,0 +1,10 @@
+# Copy this file to local.properties and fill in your values.
+# local.properties is gitignored — NEVER commit your real API key.
+
+# Get a free Google Maps API key at: https://console.cloud.google.com
+# Enable: Maps SDK for Android
+# Restrict the key to your app's package name (com.gottago.app) for security.
+MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
+
+# Standard Android SDK path (Gradle sets this automatically; update only if needed)
+# sdk.dir=/Users/YourName/Library/Android/sdk
