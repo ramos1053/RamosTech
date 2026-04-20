@@ -14,13 +14,21 @@ I approach projects as opportunities to learn, test, and share. This space refle
 
 ## Projects
 
-Here’s what you’ll typically see in my repositories:
+| Project | Platform | Description |
+|---------|----------|-------------|
+| [**GottaGo**](GottaGo/README.md) | iOS (Swift/SwiftUI) | Worldwide public restroom finder — live data from 4 APIs, interactive map, favorites, walking routes |
+| [**GottaGo Android**](GottaGo-Android/README.md) | Android (Kotlin/Compose) | Full Android port of GottaGo with Google Maps and Material 3 |
+| **Nimbus-Swift** | macOS | Weather utility |
+| **PIP** | macOS | Picture-in-picture helper |
+| **Restless** | macOS | REST API testing tool |
+| **Snipster** | macOS | Code snippet manager |
+| **Time Machine Manager** | macOS | Backup scheduling utility |
+
+Other things you’ll find here:
 - **Exploratory scripts**: Bash, Swift, and Python snippets that probe macOS behaviors or streamline admin tasks.
 - **Automation experiments**: Workflows that integrate with tools like Jamf Pro, SentinelOne, or clipboard managers.
 - **Text utilities**: Methods for cleaning, formatting, and standardizing documentation.
 - **Conceptual prototypes**: Early scaffolds for larger ideas, like plugin systems or orchestration layers.
-
-Each project is documented with enough context to be useful, but the emphasis is on exploration rather than production‑ready polish.
 
 ## Philosophy
 
