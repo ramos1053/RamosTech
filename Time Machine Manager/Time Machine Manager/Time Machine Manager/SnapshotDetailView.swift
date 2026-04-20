@@ -2,7 +2,7 @@
 //  SnapshotDetailView.swift
 //  Time Machine Manager
 //
-//  Created by Alan Ramos on 11/12/25.
+//  Created by RamosTech on 11/12/25.
 //
 
 import SwiftUI

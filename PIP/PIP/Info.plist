@@ -19,7 +19,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2025 A. Ramos, RamosTech. All rights reserved.</string>
+	<string>Copyright © 2025 RamosTech. All rights reserved.</string>
 	<key>CFBundleDisplayName</key>
 	<string>PIP</string>
 	<key>LSMinimumSystemVersion</key>

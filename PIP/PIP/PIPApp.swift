@@ -2,7 +2,7 @@
 //  PIPApp.swift
 //  PIP - Plain Text Editor
 //
-//  Created by A. Ramos on 2025.
+//  Created by RamosTech on 2025.
 //  Copyright © 2025 RamosTech. All rights reserved.
 //
 
@@ -370,6 +370,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     static var workspaceManager: WorkspaceManager?
     private var debugConsoleWindow: NSWindow?
     private var helpWindow: NSWindow?
+    /// URLs handed to us by Finder before the workspace manager was ready.
+    private var pendingURLsToOpen: [URL] = []
+
+    // MARK: - File opening from Finder / "Open With"
+
+    /// Called by macOS when Finder opens one or more files with PIP.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        let fileURLs = urls.filter { $0.isFileURL }
+        guard !fileURLs.isEmpty else { return }
+
+        if let manager = AppDelegate.workspaceManager {
+            openFiles(fileURLs, in: manager)
+        } else {
+            // Workspace isn't ready yet (app still launching). Queue and process in onAppear.
+            pendingURLsToOpen.append(contentsOf: fileURLs)
+        }
+    }
+
+    /// Called by ContentViewWrapper.onAppear once the workspace manager is wired up.
+    func processPendingURLs() {
+        guard let manager = AppDelegate.workspaceManager, !pendingURLsToOpen.isEmpty else { return }
+        let urls = pendingURLsToOpen
+        pendingURLsToOpen = []
+        openFiles(urls, in: manager)
+    }
+
+    private func openFiles(_ urls: [URL], in manager: WorkspaceManager) {
+        let docManager = DocumentManager()
+        Task { @MainActor in
+            for url in urls {
+                do {
+                    let (content, docInfo) = try await docManager.importFile(from: url)
+                    guard let workspace = manager.activeWorkspace else { continue }
+                    // Don't open a file that's already showing in this workspace.
+                    if !workspace.tabManager.isFileOpen(url) {
+                        workspace.tabManager.openFile(content: content, documentInfo: docInfo)
+                    }
+                } catch {
+                    DebugLogger.shared.error(
+                        "Failed to open file from Finder: \(url.lastPathComponent): \(error.localizedDescription)",
+                        category: "FileOperations"
+                    )
+                }
+            }
+        }
+    }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Initialize debug logger early

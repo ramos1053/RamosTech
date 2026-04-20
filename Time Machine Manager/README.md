@@ -21,17 +21,26 @@ A modern macOS application for managing Time Machine local snapshots with a nati
 - Xcode 15.0 or later (for building)
 - Administrator privileges (for certain operations like deleting snapshots and toggling Time Machine)
 
-## Building the App
+## Building from Source
+
+### Code Signing (required before first build)
+
+1. Open `Time Machine Manager/Time Machine Manager.xcodeproj` in Xcode
+2. Click the project in the Navigator → select the **Time Machine Manager** target
+3. Go to **Signing & Capabilities**
+4. Set **Team** to your own Apple developer account (or "None / Sign to Run Locally" for ad-hoc)
+5. Change the **Bundle Identifier** if needed (e.g. `com.yourname.TimeMachineManager`)
+
+### Build and run
 
 1. Open the Xcode project:
    ```bash
-   cd "/Users/aramos/Projects/Time Machine Manager/Time Machine Manager"
-   open "Time Machine Manager.xcodeproj"
+   open "Time Machine Manager/Time Machine Manager.xcodeproj"
    ```
 
-2. Select your development team in the project settings
+2. Select the **Time Machine Manager** scheme and **My Mac** as the destination
 
-3. Build and run the app (⌘R)
+3. Press **⌘R** to build and run
 
 ## Usage
 
@@ -141,7 +150,7 @@ When these operations are performed, macOS will prompt for authentication.
 
 ## License
 
-Created by Alan Ramos
+Created by RamosTech
 
 ## Contributing
 

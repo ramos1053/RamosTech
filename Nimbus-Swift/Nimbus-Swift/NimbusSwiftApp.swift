@@ -4,7 +4,7 @@
 //
 //  Modern Swift rewrite of Nimbus - Cumulus Server Management
 //
-// Alan Ramos - RamosTech - 2025
+// RamosTech - RamosTech - 2025
 
 import SwiftUI
 
