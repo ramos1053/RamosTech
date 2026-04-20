@@ -1,20 +1,62 @@
-# macOS
+# ── macOS ────────────────────────────────────────────────────────────────────
 .DS_Store
 .AppleDouble
 .LSOverride
+._*
+.Spotlight-V100
+.Trashes
 
-# Xcode build artifacts
+# ── Xcode build artifacts ─────────────────────────────────────────────────────
 build/
 DerivedData/
 *.xcuserstate
 *.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
 
-# Swift Package Manager
+# ── Swift Package Manager ─────────────────────────────────────────────────────
 .swiftpm/
 .build/
 Packages/
+Package.resolved
 
-# Sensitive / generated
+# ── Android ───────────────────────────────────────────────────────────────────
+*.apk
+*.aab
+local.properties
+google-services.json
+GoogleService-Info.plist
+.gradle/
+**/build/
+*.class
+
+# ── Credentials & secrets (NEVER commit these) ───────────────────────────────
 *.pem
-xcuserdata/
+*.key
+*.p12
+*.pfx
+*.cer
+*.mobileprovision
+*.provisionprofile
+.env
+.env.*
+secrets.json
+secrets.plist
+credentials.json
+credentials.plist
+**/apikeys.*
+**/*secret*
+**/*Secret*
+
+# ── IDE / editor state ────────────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
