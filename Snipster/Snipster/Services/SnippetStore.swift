@@ -2,7 +2,7 @@
 //  SnippetStore.swift
 //  Snipster
 //
-//  Created by Alan Ramos on 12/16/25.
+//  Created by RamosTech on 12/16/25.
 //
 
 import Foundation

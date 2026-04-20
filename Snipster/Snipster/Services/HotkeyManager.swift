@@ -2,7 +2,7 @@
 //  HotkeyManager.swift
 //  Snipster
 //
-//  Created by Alan Ramos on 1/8/26.
+//  Created by RamosTech on 1/8/26.
 //
 
 import Foundation

@@ -2,7 +2,7 @@
 //  DebugLogger.swift
 //  PIP
 //
-//  Created by A. Ramos on 2025.
+//  Created by RamosTech on 2025.
 //  Copyright © 2025 RamosTech. All rights reserved.
 //
 

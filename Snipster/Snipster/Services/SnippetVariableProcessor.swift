@@ -2,7 +2,7 @@
 //  SnippetVariableProcessor.swift
 //  Snipster
 //
-//  Created by Alan Ramos on 12/18/25.
+//  Created by RamosTech on 12/18/25.
 //
 
 import Foundation

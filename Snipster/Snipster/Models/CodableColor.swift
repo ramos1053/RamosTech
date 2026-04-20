@@ -2,7 +2,7 @@
 //  CodableColor.swift
 //  Snipster
 //
-//  Created by Alan Ramos on 12/17/25.
+//  Created by RamosTech on 12/17/25.
 //
 
 import SwiftUI

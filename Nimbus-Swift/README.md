@@ -87,9 +87,19 @@ Nimbus-Swift/
 
 ### Build Instructions
 
+#### Code Signing (required before first build)
+
 1. Open `Nimbus-Swift.xcodeproj` in Xcode
-2. Select the "Nimbus-Swift" scheme
-3. Build and run (⌘R)
+2. Click the project in the Navigator → select the **Nimbus-Swift** target
+3. Go to **Signing & Capabilities**
+4. Set **Team** to your own Apple developer account (or "None / Sign to Run Locally" for ad-hoc)
+5. Optionally update **Bundle Identifier** to match your team (e.g. `com.yourname.NimbusSwift`)
+
+#### Build and run
+
+1. Open `Nimbus-Swift.xcodeproj` in Xcode
+2. Select the **Nimbus-Swift** scheme and **My Mac** as the destination
+3. Press **⌘R** to build and run
 
 ### Window Configuration
 - Fixed size: 650×550 pixels

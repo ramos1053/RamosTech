@@ -2,7 +2,7 @@
 //  AboutView.swift
 //  PIP
 //
-//  Created by A. Ramos on 2025.
+//  Created by RamosTech on 2025.
 //  Copyright © 2025 RamosTech. All rights reserved.
 //
 
@@ -41,7 +41,7 @@ struct AboutView: View {
                 .padding(.horizontal, 40)
 
             // Copyright
-            Text("Copyright © 2025 A. Ramos, RamosTech")
+            Text("Copyright © 2025 RamosTech")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
 

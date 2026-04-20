@@ -1582,6 +1582,10 @@ struct ContentViewWrapper: View {
         }
         .onAppear {
             AppDelegate.workspaceManager = workspaceManager
+            // Open any files Finder sent before the workspace manager was ready.
+            if let appDelegate = NSApp.delegate as? AppDelegate {
+                appDelegate.processPendingURLs()
+            }
         }
     }
 }
