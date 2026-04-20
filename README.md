@@ -16,8 +16,7 @@ I approach projects as opportunities to learn, test, and share. This space refle
 
 | Project | Platform | Description |
 |---------|----------|-------------|
-| [**GottaGo**](GottaGo/README.md) | iOS (Swift/SwiftUI) | Worldwide public restroom finder — live data from 4 APIs, interactive map, favorites, walking routes |
-| [**GottaGo Android**](GottaGo-Android/README.md) | Android (Kotlin/Compose) | Full Android port of GottaGo with Google Maps and Material 3 |
+| [**GottaGo**](GottaGo/README.md) | iOS + Android | Worldwide public restroom finder — live data from 4 APIs, interactive map, favorites, walking routes |
 | **Nimbus-Swift** | macOS | Weather utility |
 | **PIP** | macOS | Picture-in-picture helper |
 | **Restless** | macOS | REST API testing tool |
