@@ -17,11 +17,11 @@ I approach projects as opportunities to learn, test, and share. This space refle
 | Project | Platform | Description |
 |---------|----------|-------------|
 | [**GottaGo**](GottaGo/README.md) | iOS + Android | Worldwide public restroom finder — live data from 4 APIs, interactive map, favorites, walking routes |
-| **Nimbus-Swift** | macOS | Weather utility |
-| **PIP** | macOS | Picture-in-picture helper |
-| **Restless** | macOS | REST API testing tool |
+| **Nimbus-Swift** | macOS | Canto Cumulus server tool |
+| **PIP** | macOS | Programming focused text editor |
+| **Restless** | macOS | Stay Awake and app caffeinate tool |
 | **Snipster** | macOS | Code snippet manager |
-| **Time Machine Manager** | macOS | Backup scheduling utility |
+| **Time Machine Manager** | macOS | Time Machine backup utility |
 
 Other things you’ll find here:
 - **Exploratory scripts**: Bash, Swift, and Python snippets that probe macOS behaviors or streamline admin tasks.
