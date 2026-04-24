@@ -63,6 +63,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
@@ -77,8 +82,7 @@ jobs:
       - name: Build Android
         run: |
           cd GottaGo/Android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          gradle assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
