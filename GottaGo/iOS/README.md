@@ -72,16 +72,6 @@ Tap any pin or row to open a detail sheet containing:
 
 ---
 
-## Screenshots
-
-> *Add screenshots here after first build. Drag images into the `Screenshots/` folder and reference them below.*
-
-| Home | Map | Favorites | Detail |
-|------|-----|-----------|--------|
-| ![home](../Screenshots/home.png) | ![map](../Screenshots/map.png) | ![favorites](../Screenshots/favorites.png) | ![detail](../Screenshots/detail.png) |
-
----
-
 ## Requirements
 
 | Requirement | Version |
