@@ -16,7 +16,7 @@ I approach projects as opportunities to learn, test, and share. This space refle
 
 | Project | Platform | Description |
 |---------|----------|-------------|
-| [**GottaGo**](GottaGo/README.md) | iOS + Android | Worldwide public restroom finder — live data from 4 APIs, interactive map, favorites, walking routes |
+| [**GottaGo**](GottaGo/README.md) | iOS | Worldwide public restroom finder — live data from 4 APIs, interactive map, favorites, walking routes |
 | **Nimbus-Swift** | macOS | Canto Cumulus server tool |
 | **PIP** | macOS | Programming focused text editor |
 | **Restless** | macOS | Stay Awake and app caffeinate tool |
