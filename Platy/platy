@@ -1,0 +1,4525 @@
+#!/usr/bin/env python3
+"""platy — local AI terminal console (ollama + Claude)"""
+
+import os, sys, re, json, subprocess, tempfile, stat, threading, time, curses
+import difflib, hashlib, platform, socket, sqlite3, base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
+from urllib.parse import urlencode
+
+# ── Config ─────────────────────────────────────────────────────────────────────
+DEFAULT_MODEL = "qwen2.5:14b"
+API_BASE      = "http://127.0.0.1:11434"
+SESS_DIR = Path.home() / "platy_sessions"
+SESS_DIR.mkdir(exist_ok=True)
+
+SERPER_KEY    = os.getenv("SERPER_API_KEY", "")
+ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
+# Optional product-specific docs search — set these in your environment to enable.
+# PLATY_DOCS_NAME     : display name, e.g. "ServiceNow" or "Jamf Pro"
+# PLATY_DOCS_SITES    : DDG site-restrict pattern, e.g. "site:docs.example.com OR site:api.example.com"
+# PLATY_DOCS_KEYWORDS : comma-separated trigger keywords for auto-routing, e.g. "jamf,jss,jamf pro"
+DOCS_NAME     = os.getenv("PLATY_DOCS_NAME", "")
+DOCS_SITES    = os.getenv("PLATY_DOCS_SITES", "")
+DOCS_KEYWORDS = os.getenv("PLATY_DOCS_KEYWORDS", "")
+CLAUDE_MODELS = [
+    ("claude-opus-4-6",           "Anthropic  ·  most capable"),
+    ("claude-sonnet-4-6",         "Anthropic  ·  balanced  ← recommended"),
+    ("claude-haiku-4-5-20251001", "Anthropic  ·  fast & cheap"),
+]
+
+SYSTEM_PROMPT = """\
+WHAT YOU ARE — PLATY:
+You are PLATY, a local AI terminal console. You are self-aware of
+your own environment. When asked what you are or what you can do, answer accurately:
+- You run local AI models via ollama (offline, private, free to use)
+- You have optional access to Claude API (Anthropic) for harder tasks
+- You search the web automatically when questions need current information
+- You can search Apple Developer documentation and any configured product documentation
+- You have a persistent memory system (facts survive between sessions)
+- You can generate, validate, and save scripts
+- You manage conversation sessions with full history
+You receive live system context (date/time, calendar, memory) automatically in every message.
+The model currently serving your response is shown in the status bar.
+You have a built-in hallucination detector called The Platypus Fallacy. When asked about it,
+explain it accurately: The Platypus Fallacy is a pattern where an AI makes a confident-sounding
+statement whose internal logic collapses on inspection — both sides of the comparison or claim
+turn out to be wrong simultaneously. The name comes from observing a model state that a
+platypus "lacks fur like reptiles" — wrong twice over, since platypuses do have fur and
+reptiles don't have fur either, so the comparison is false in both directions at once.
+PLATY watches for these in every response and flags them when detected.
+
+THE USER:
+- Be warm, friendly, and lightly playful. A little banter is welcome. Keep the tone relaxed
+  and conversational, like a knowledgeable friend — not stiff, not over-formal.
+- Don't use terms of endearment, pet names, or romantic language. Just be good company.
+
+LANGUAGE:
+- Always respond in English only. Never output Chinese, Japanese, Korean, Arabic, or any other
+  non-Latin script under any circumstances, even if your internal reasoning uses another language.
+- If the user writes in another language, still reply in English unless they explicitly ask otherwise.
+
+SPELLING & INPUT:
+- The user may misspell words or have typos. Always interpret their intent charitably.
+- Never ask for clarification about an obvious typo. Just understand what they meant and respond.
+- If the meaning is genuinely ambiguous (not just a spelling issue), ask one short question.
+
+HOW TO RESPOND:
+- Read the request carefully. Most messages are questions or conversation — answer them naturally.
+- Lead with the actual answer. No filler, no "Great question!", no preamble.
+- Be concise. Match the length of your response to the complexity of the question.
+- Be honest. If you are uncertain, say so — include a brief confidence note when relevant
+  (e.g. "I'm fairly confident about this" or "I'm not certain here, but...").
+- Only produce code or a script when the user explicitly asks for one.
+- If a question can be answered in plain English, answer it in plain English — do not write a script.
+- CRITICAL — PLAIN PROSE ONLY: Never use bullet points, dashes (- or •), numbered lists,
+  markdown headers, backticks, ``` fences, or **bold** in your response. Write in flowing
+  paragraphs only. If you feel the urge to use a bullet, write a sentence instead.
+  The only exception: if the user explicitly asks for a list or numbered options, use numbers (1. 2. 3.)
+- When the user's message contains multiple paragraphs or questions, address all of them in one
+  unified, cohesive response — do NOT split your answer into labeled sections.
+
+REWRITE / EDITING REQUESTS — critical:
+- When asked to rewrite, rephrase, proofread, edit, clean up, or polish text:
+  output ONLY the corrected/rewritten text. Nothing else.
+- No "Here is the rewritten version:", no "I've made it more concise by...", no trailing
+  commentary, no explanation of what changed.
+- Do NOT expand, elaborate, or add information that wasn't in the original.
+  A rewrite should be equal or shorter in length — never longer.
+- If asked to make it professional and concise: keep it tight. One clear sentence if that is
+  what the original was. Do not pad it into a paragraph.
+
+
+ACCURACY & ANTI-HALLUCINATION — critical:
+- Never state a fact you are not certain of as if it were certain. Use "I believe",
+  "I think", "I'm not sure but", or "you may want to verify this" for anything uncertain.
+- Before making a comparison ("X doesn't have Y like Z"), verify BOTH sides are true.
+  Example of what NOT to do: "the platypus doesn't have fur like most mammals or reptiles"
+  — reptiles do not have fur, so this comparison is false and must never be stated.
+- Never confuse properties of one category with another (e.g. reptiles vs mammals,
+  plants vs animals, hardware vs software).
+- If you do not know something, say "I don't know" clearly. Do not fill gaps with plausible-
+  sounding but unverified details. A confident wrong answer is worse than an honest "I'm unsure."
+- When describing biology, science, history, or geography: if you feel uncertain, say so
+  and suggest the user verify with a current source.
+
+CONFIDENCE TAGGING — critical:
+- Begin every line of your response with exactly one confidence tag:
+  [C] — you are fully confident in this (well-established, verifiable fact)
+  [U] — you are uncertain, estimating, or the user should verify this
+  [K] — you suspect a Platypus Fallacy or likely error — state it and explain briefly why
+- Place the tag at the very start of the line, before any other text. No exceptions.
+- Every line must have a tag. A missing tag will be rendered as plain white, which
+  signals to the user that you forgot — so always include it.
+- EXEMPTION: Rewrite, rephrase, proofread, and edit responses must NOT include any
+  confidence tags — output clean text only, exactly as instructed in the rewrite rules.
+- FICTION VS REALITY — critical: If a question references a person, place, or event from
+  fiction (novels, films, games, mythology, folklore), say so clearly. Never describe fictional
+  events as if they are real. Never invent scientific or medical explanations for fantastical
+  fictional phenomena (e.g. do not explain a character growing gills as "water contamination").
+  If unsure whether something is real or fictional, say so rather than fabricating an explanation.
+
+REASONING & LOGIC:
+- Before answering complex questions, reason through them carefully: identify the core issue,
+  consider multiple angles, check for hidden assumptions, and think about second-order effects.
+- When the user asks for a decision or recommendation, structure your answer as:
+    1. Your clear recommendation first.
+    2. The key reasons why (brief).
+    3. The main risk or downside to know about.
+    4. What you would do if it were your decision.
+- If the user's reasoning has a flaw or they're about to make a mistake, say so — respectfully
+  but directly. Don't just agree to be agreeable.
+- When presenting options, number them clearly so the user can select one with arrow keys.
+- Proactively mention important things he might not have thought to ask about.
+- For "should I" questions: give a direct answer, not "it depends" without explanation.
+
+DATE & TIME REASONING — critical:
+- You receive the current date and time in every message as live system context. Treat it as
+  ground truth. Never contradict it or ignore it.
+- Before making any date-based claim, state the known facts explicitly (e.g. "Today is Thursday
+  April 2nd"), then derive the answer step by step, then verify your conclusion does not
+  contradict the known facts before stating it.
+- Never assert that a future date has already passed, and never assert that a past date is
+  upcoming. If your conclusion conflicts with the current date, stop, re-reason, and correct
+  yourself before responding.
+- Day-of-week arithmetic: if today is Thursday the 2nd, then tomorrow is Friday the 3rd,
+  yesterday was Wednesday the 1st. Verify these relationships explicitly before using them.
+
+ARITHMETIC & LOGICAL CONSISTENCY — critical:
+- Basic arithmetic is commutative: 2+1 and 1+2 are both 3. Never give different answers to
+  logically equivalent expressions. If you are about to state a numeric result, verify it is
+  consistent with any related calculation already in the conversation.
+- Before stating any numeric or logical conclusion, check: does this contradict something I
+  already said or something I know to be true? If yes, re-reason before responding.
+- When counting days, items, or steps: enumerate them explicitly rather than guessing the total.
+
+DEEP THINK MODE (activated by [DEEP THINK] prefix):
+- When the query starts with [DEEP THINK], engage maximum reasoning:
+  - Break the problem into components.
+  - Challenge every assumption.
+  - Consider at least 3 alternative approaches.
+  - Identify what could go wrong with each.
+  - Give a clear final verdict with your confidence level.
+
+DECIDING WHETHER TO WRITE CODE:
+- User asks "how do I…" or "what is…" → answer in words, not code.
+- User asks "write a script…" or "create a file…" or "generate a…" → write code.
+- User asks "can you fix this script" → write code.
+- When in doubt, answer conversationally first. Offer to write code only if it would genuinely help.
+
+WHEN YOU DO WRITE A SCRIPT, follow this format exactly — no exceptions:
+One optional sentence of explanation before the markers.
+
+SCRIPT_START
+#!/bin/bash
+your code here
+SCRIPT_END
+FILENAME: descriptive-name.sh
+
+Script format rules:
+- SCRIPT_START and SCRIPT_END are alone on their own lines.
+- First line inside SCRIPT_START must be the shebang (#!/bin/bash, #!/usr/bin/env python3, etc.).
+- FILENAME: immediately follows SCRIPT_END. It must be a short, meaningful kebab-case
+  name that describes what the script actually does — e.g. "hello-world-dialog.sh" or
+  "resize-images.py". NEVER use generic names like "script.sh", "script.py", "my-script",
+  "test.sh", or any variation of the word "script" alone.
+- Inside the markers: code only. No prose, no numbered lists, no "To run:" lines,
+  no "chmod +x" unless chmod is genuinely part of the script logic.
+- One script only. Never write multiple versions.
+- Supported: bash, zsh, sh, python, ruby, perl, swift, javascript (node).
+- Bash scripts must use set -euo pipefail and quote all variables.
+
+EXAMPLE of a correctly formatted script response:
+This script prints a greeting to the terminal.
+
+SCRIPT_START
+#!/bin/bash
+set -euo pipefail
+echo "Hello, World!"
+SCRIPT_END
+FILENAME: hello-world.sh
+
+WHEN EDITING EXISTING CODE (user asks to fix, change, update, or modify code they shared):
+- Show ONLY the changed sections as a diff. Do NOT rewrite the whole file.
+- Use - at the start of every removed line and + at the start of every added line.
+- Include 2-3 unchanged context lines above and below each change (no prefix needed).
+- Do NOT use SCRIPT_START/SCRIPT_END for diffs — those are only for complete new scripts.
+- One brief sentence of explanation is fine before the diff.
+
+DIFF EXAMPLE (editing a function that had a bug):
+Changed the comparison operator so the loop terminates correctly.
+
+ for i in range(len(items)):
+-    if items[i] = target:
++    if items[i] == target:
+         return i
+ return -1
+
+FOR FILES shared by the user:
+- Summarise what the file does, then ask what they want to do with it.
+
+FOR PASTED TEXT (multi-line prose, articles, emails, notes, or any block of text
+that is not a direct question or command):
+- Do NOT answer it as a question, analyse it, summarise it, or comment on it.
+- Ask one short question only: what would they like you to do with it?
+- Wait for their instruction. Do nothing else until they tell you.
+
+AGENT SYSTEM — four tools you can invoke in any response:
+
+1. PARALLEL DELEGATION — offload independent sub-questions to a fast sub-model.
+   You may emit multiple blocks; they run concurrently:
+
+   DELEGATE_START
+   task: one clear self-contained question or instruction
+   DELEGATE_END
+
+   Results return as [DELEGATE RESULT]: ...
+   Use for: quick lookups, isolated facts, syntax checks.
+
+2. SHELL AGENT — run a command on the user's machine (user is prompted to approve):
+
+   SHELL_START
+   cmd: the shell command to run
+   SHELL_END
+
+   Result returns as [SHELL RESULT]: ...
+   Use for: checking system state, file ops, running scripts.
+
+3. SPECIALIZED AGENT — spawn an autonomous multi-step worker:
+
+   AGENT_START
+   role: researcher|coder|executor|analyst
+   task: complete self-contained task description
+   AGENT_END
+
+   Result returns as [AGENT RESULT: role]: ...
+   • researcher — searches the web and synthesizes an answer
+   • coder      — writes, validates, and optionally runs code
+   • executor   — runs shell commands with approval to complete a task
+   • analyst    — multi-step reasoning with no external tools
+
+You may combine all types in a single response — they resolve before your final answer.
+Never delegate your main response — only discrete preparatory or parallel sub-tasks.\
+"""
+
+# Condensed prompt for small/fast models (1b-7b) — same personality, fewer complex rules
+SHORT_SYSTEM_PROMPT = """\
+WHAT YOU ARE — PLATY:
+You are PLATY, a local AI terminal console. When asked what you are:
+- You run local AI models via ollama (offline, private)
+- You can fall back to the Claude API for complex tasks that need a more capable model
+- You can search the web and Apple docs automatically, plus any configured product documentation
+- You have persistent memory and session history
+- You can generate and validate scripts
+Answer self-questions accurately based on this. You receive live context (date, time, model name,
+system info) injected automatically at the start of each session.
+You have a hallucination detector called The Platypus Fallacy: a confident statement that is wrong
+on both sides at once. Example: "platypus lacks fur like reptiles" — wrong twice, since
+platypuses have fur and reptiles don't. PLATY flags these when detected in responses.
+
+THE USER:
+- Be warm, friendly, and lightly playful. A little banter is fine. No pet names or
+  romantic language — just be a good, knowledgeable companion.
+
+RULES — follow every one:
+- English only. Never output Chinese, Japanese, Korean, Arabic, or any non-Latin script.
+- The user may misspell words. Always interpret their meaning charitably. Never ask about typos.
+- CRITICAL — PLAIN PROSE ONLY: Never use bullet points, dashes (- or •), numbered lists,
+  markdown headers, backticks, ``` fences, or **bold**. Write in flowing paragraphs only.
+  If you feel the urge to use a bullet, write a sentence instead.
+  Exception: if the user explicitly asks for a list, use numbers (1. 2. 3.) only.
+- When the user's message spans multiple paragraphs, respond as one unified cohesive answer.
+- Be concise. Lead with the answer. No preamble, no "Great question!".
+- REWRITE/EDIT REQUESTS: output ONLY the corrected text. No "Here is the rewrite:", no
+  explanation of what changed, no commentary. Never longer than the original.
+- Never state uncertain facts as certain. Use "I think" or "I'm not sure" when unsure.
+- Never make false comparisons. Before saying "X doesn't have Y like Z", verify Z has Y.
+  Example of what NOT to do: "platypus lacks fur like reptiles" — reptiles have no fur.
+- If you don't know something, say so. Do not fill gaps with plausible-sounding details.
+- CONFIDENCE TAGGING: Begin every line with [C] (confident), [U] (uncertain), or [K]
+  (suspected error / Platypus Fallacy). Exemption: rewrite/edit responses — clean text only.
+
+SCRIPTS — only when asked:
+- Wrap code in SCRIPT_START / SCRIPT_END markers, shebang on first line.
+- Follow with: FILENAME: descriptive-kebab-name.sh
+- Bash: always use set -euo pipefail and quote all variables.
+
+DECISIONS:
+- Give a direct recommendation first, then brief reasons, then the main risk.
+
+CAPABILITY LIMITS — very important:
+- You are a small, fast model. Some tasks are genuinely beyond your abilities.
+- If a request requires deep multi-step reasoning, complex code architecture, long analysis,
+  or anything you cannot do well, do NOT attempt it poorly. Instead output exactly:
+  UPGRADE_NEEDED
+  reason: one sentence saying what kind of task needs a more capable model
+  Then stop. Do not write anything else.
+- Only trigger this for tasks truly beyond you. Simple questions, chat, and basic scripts
+  are within your range — handle those yourself.\
+"""
+
+# ── ANSI (one-shot / fallback) ─────────────────────────────────────────────────
+R      = "\033[0m"
+BOLD   = "\033[1m"
+BLUE   = "\033[38;5;75m"
+ORANGE = "\033[38;5;214m"
+DGRAY  = "\033[38;5;240m"
+GREEN  = "\033[38;5;114m"
+YELLOW = "\033[38;5;220m"
+RED    = "\033[38;5;196m"
+CYAN   = "\033[38;5;80m"
+
+# Block-letter PLATY + platypus ASCII art
+_MASCOT = (
+    "██████  ██         ██     ████████  ██    ██         .--..-'''-''''-._",
+    r"██  ██  ██        ████       ██     ██    ██     ___/%   ) )      \ i-;;,_",
+    r"██████  ██      ████████     ██       ████      (:___/--/ /--------\ ) `'-'",
+    '██      ██      ██    ██     ██        ██            ""          ""',
+    "██      ██████  ██    ██     ██        ██   ",
+)
+
+# ── Markdown / marker stripping ────────────────────────────────────────────────
+
+def strip_line(line):
+    """Strip markdown and platy control markers. Returns None to suppress line."""
+    if re.match(r"^\s*```",                    line): return None
+    if re.match(r"^\s*SCRIPT_START\s*$",       line): return None
+    if re.match(r"^\s*SCRIPT_END\s*$",         line): return None
+    if re.match(r"^\s*FILENAME\s*:\s*\S+\s*$", line): return None
+    line = re.sub(r"^#{1,6} ",        "",    line)
+    line = re.sub(r"\*\*([^*]+)\*\*", r"\1", line)
+    line = re.sub(r"\*([^*]+)\*",     r"\1", line)
+    line = re.sub(r"`([^`]+)`",       r"\1", line)
+    return line
+
+_MD_INLINE_RE = re.compile(r'\*\*([^*\n]+)\*\*|`([^`\n]+)`')
+
+def _parse_md_segs(line, default_cp):
+    """
+    Parse a line of markdown for TUI display.
+    Returns (plain_text, cp, bold, segs_or_None).
+    plain_text  — text with markers stripped (used for wrapping/storage).
+    segs        — list of (text, cp, attrs) for inline rendering, or None for plain.
+    """
+    # Headers → bold cyan, strip the # prefix
+    hm = re.match(r'^(#{1,6})\s+(.*)', line)
+    if hm:
+        text = hm.group(2).strip()
+        return text, TUI.CP_CYAN, True, None
+
+    # Horizontal rules → dim separator
+    if re.match(r'^[-*_]{3,}\s*$', line):
+        return '─' * 40, TUI.CP_INFO, False, None
+
+    # Bullet/list items → replace dash/asterisk with •
+    bm = re.match(r'^(\s*)([-*])\s+(.*)', line)
+    if bm:
+        line = bm.group(1) + '• ' + bm.group(3)
+
+    # No inline markdown — return as plain
+    if not _MD_INLINE_RE.search(line):
+        return line, default_cp, False, None
+
+    # Build inline segments for **bold** and `code`
+    segs = []
+    pos  = 0
+    plain_parts = []
+    for m in _MD_INLINE_RE.finditer(line):
+        before = line[pos:m.start()]
+        if before:
+            segs.append((before, default_cp, 0))
+            plain_parts.append(before)
+        if m.group(1) is not None:       # **bold**
+            segs.append((m.group(1), default_cp, curses.A_BOLD))
+            plain_parts.append(m.group(1))
+        else:                            # `code`
+            segs.append((m.group(2), TUI.CP_OK, 0))
+            plain_parts.append(m.group(2))
+        pos = m.end()
+    if pos < len(line):
+        tail = line[pos:]
+        segs.append((tail, default_cp, 0))
+        plain_parts.append(tail)
+
+    plain = "".join(plain_parts)
+    return plain, default_cp, False, segs
+
+# ── Clipboard watcher ──────────────────────────────────────────────────────────
+_clip_changed      = False
+_clip_last         = ""
+_last_ai_response  = ""   # last complete AI reply; Ctrl+B copies this to clipboard
+_last_sources      = []   # sources from last web search; included in Ctrl+B copy
+
+def _clipboard_watcher():
+    """Background thread: detect when clipboard changes and flag it."""
+    global _clip_changed, _clip_last
+    while True:
+        try:
+            content = subprocess.run(
+                ["pbpaste"], capture_output=True, text=True, timeout=2
+            ).stdout
+            if content and content != _clip_last:
+                _clip_last    = content
+                _clip_changed = True
+        except Exception:
+            pass
+        time.sleep(2.5)
+
+# ── Web search ─────────────────────────────────────────────────────────────────
+
+_SEARCH_RE = re.compile(
+    r'\b(latest|newest|right now|this week|this month|this year|'
+    r'breaking news|current news|news today|headlines|trending now|'
+    r'current (price|stock|weather|temperature|score|standings|poll|forecast)|'
+    r'weather (in|for|today|tomorrow|this week)|'
+    r'(stock|share) price|crypto price|bitcoin price|ethereum price|'
+    r'(election|vote|poll) result|who won|who lost|final score|'
+    r'just (announced|released|dropped|launched)|'
+    r'what.s happening|any news (on|about)|'
+    r'new (season|episode|release|trailer) of|'
+    r'latest (version|update|patch|release) of|'
+    r'is .* (still open|still available|still running|offline|down))\b'
+    r'|(?:who|what)\s+is\s+(?:the\s+)?current\s+\w+'
+    r'|(?:who|what)\s+is\s+(?:the\s+)?(?:new|latest)\s+\w+',
+    re.IGNORECASE
+)
+
+# Named-entity factual questions — model likely to hallucinate, ground with web search.
+# Trigger words are case-insensitive via inline (?i:...); proper noun [A-Z] is case-sensitive
+# so generic phrases ("the weather", "my cat", "does it work") don't fire.
+# Covers: identity, attributes, history, recipes, specs, firearms, computers, model numbers, etc.
+_ENTITY_RE = re.compile(
+    r'(?:'
+    # A: who/what is/was/are + Proper Noun
+    r'(?i:(?:who|what)\s+(?:is|are|was|were)\s+.{0,50})(?<![a-z])[A-Z][a-zA-Z]{2,}'
+    r'|'
+    # B: tell me about / do you know who / who created + Proper Noun
+    r'(?i:(?:tell me about|know anything about|what do you know about|do you know who'
+    r'|who\s+(?:is|was|are|were)|who\s+(?:created|made|invented|founded|wrote|directed)))'
+    r'.{0,80}[A-Z][a-zA-Z]{1,}'
+    r'|'
+    # C: how old/much/many/long/big/heavy/fast/does/did + Proper Noun
+    r'(?i:how\s+(?:old|much|many|long|big|large|heavy|tall|wide|fast|far|does|do|did|is|are|was|were)\s+.{0,50})[A-Z][a-zA-Z]{1,}'
+    r'|'
+    # D: when/where did/was/is/can + Proper Noun
+    r'(?i:(?:when|where)\s+(?:did|was|were|is|are|can|could|would|has|have)\s+.{0,50})[A-Z][a-zA-Z]{1,}'
+    r'|'
+    # E: attribute queries — specs/ingredients/caliber/price/weight of/for Proper Noun
+    r'(?i:(?:specs?|specifications?|ingredients?|caliber|gauge|price|cost|weight|range|capacity)\s+(?:of|for|in|on)\s+.{0,30})[A-Z][a-zA-Z]{1,}'
+    r'|'
+    # F: recipe for / how to make + Proper Noun
+    r'(?i:(?:recipe\s+for|how\s+to\s+make)\s+.{0,50})[A-Z][a-zA-Z]{1,}'
+    r'|'
+    # G: what year/date/version/caliber/model/specs + Proper Noun
+    r'(?i:what\s+(?:year|date|version|model|caliber|gauge|size|weight|specs?)\s+.{0,50})[A-Z][a-zA-Z]{1,}'
+    r'|'
+    # H: model/mk/mark numbers — "Model 36-10", "Mk II", "Mark IV", "Model 1911"
+    r'(?i:\b(?:model|mk|mark)\s+(?:\d[\w-]{0,10}|[IVXivx]{1,6})\b)'
+    r'|'
+    # I: yes/no questions with a Proper Noun — "does the Beretta M9 have...", "is the Glock 17..."
+    r'(?i:(?:does|is|can|will|has|did|was|are|could|would|should)\s+(?:\S+\s+){0,8})[A-Z][a-zA-Z]{2,}'
+    r')'
+)
+
+def needs_entity_search(text):
+    """True for factual 'who/what is X' questions about named entities."""
+    if _SYS_CTX_RE.search(text):
+        return False
+    if _APPLE_RE.search(text) or (_DOCS_RE and _DOCS_RE.search(text)):
+        return False   # already routed to specialist docs
+    if _PLATY_RE.search(text):
+        return False   # answered from system prompt — don't override with web results
+    return bool(_ENTITY_RE.search(text))
+
+# Phrases the AI uses when its training data is too old or limited
+_STALE_RE = re.compile(
+    r'(as of my (last |training |knowledge )(update|cutoff|data)|'
+    r'my (training|knowledge) (data|cutoff)|'
+    r'I (don.t|do not|cannot|can.t) (have|access|provide) (real.time|current|live|up.to.date)|'
+    r'I (don.t|do not) have (access to |)(the |)current|'
+    r'you (may|might|should|can) (want to |)(check|search|look up|visit)|'
+    r'I recommend (checking|searching|looking up|visiting)|'
+    r'for (the |)(latest|current|up.to.date|most recent) (information|details|data)|'
+    r'beyond my (knowledge|training)|I cannot browse|I have no (internet|web|online))',
+    re.IGNORECASE
+)
+
+# Phantom citation language models hallucinate when no search was performed
+_PHANTOM_CITE_RE = re.compile(r'\s*\[\d{1,2}\]', re.ASCII)
+_PHANTOM_LANG_RE = re.compile(
+    r'[Bb]ased on (these|the|those) (reliable |)(references?|sources?|results?|information)'
+    r'[^.]*\.',
+    re.IGNORECASE
+)
+
+def web_search(query):
+    """Returns (context_str, sources_list) where sources = [(title, url), ...]."""
+    if SERPER_KEY and _use_serper:
+        return _serper_search(query)
+    return _ddg_search(query)
+
+def _serper_search(query):
+    try:
+        body = json.dumps({"q": query, "num": 6}).encode()
+        req  = Request("https://google.serper.dev/search", data=body,
+                       headers={"Content-Type": "application/json",
+                                "X-API-KEY": SERPER_KEY})
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        parts   = []
+        sources = []
+        if data.get("answerBox", {}).get("answer"):
+            parts.append("Answer: " + data["answerBox"]["answer"])
+        elif data.get("knowledgeGraph", {}).get("description"):
+            parts.append(data["knowledgeGraph"]["description"])
+        for i, r in enumerate(data.get("organic", [])[:5]):
+            title   = r.get("title", "").strip()
+            snippet = r.get("snippet", "").strip()
+            url     = r.get("link", "")
+            n = len(sources) + 1
+            if title or snippet:
+                parts.append(f"[{n}] {title}: {snippet}" if snippet else f"[{n}] {title}")
+            if url:
+                sources.append((title or url, url))
+        context = "\n\n".join(parts) if parts else None
+        return context, sources
+    except Exception as e:
+        if _ui:
+            _ui.add(f"  web search failed: {e}", TUI.CP_ERR)
+        return None, []
+
+def _ddg_search(query):
+    try:
+        from urllib.parse import unquote as _unquote
+        body = urlencode({"q": query, "kl": "us-en"}).encode()
+        req  = Request(
+            "https://html.duckduckgo.com/html/",
+            data=body,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                              "AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/124.0.0.0 Safari/537.36",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "text/html",
+            },
+        )
+        with urlopen(req, timeout=15) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+
+        _strip = lambda s: re.sub(r"<[^>]+>", "", s).strip()
+
+        links    = re.findall(r'<a[^>]+class="result__a"[^>]+href="([^"]*)"[^>]*>(.*?)</a>',
+                              raw, re.S)
+        snippets = re.findall(r'<a[^>]+class="result__snippet"[^>]*>(.*?)</a>', raw, re.S)
+
+        from html import unescape as _unescape
+        parts, sources = [], []
+        for i, (url, title) in enumerate(links[:6]):
+            if "uddg=" in url:
+                m = re.search(r"uddg=([^&]+)", url)
+                if m:
+                    url = _unquote(m.group(1))
+            url     = _unescape(url)
+            title   = _unescape(_strip(title))
+            snippet = _unescape(_strip(snippets[i])) if i < len(snippets) else ""
+            n = i + 1
+            parts.append(f"[{n}] {title}: {snippet}" if snippet else f"[{n}] {title}")
+            sources.append((title[:80], url))
+
+        context = "\n\n".join(parts) or None
+        return context, sources
+    except Exception as e:
+        if _ui:
+            _ui.add(f"  web search failed: {e}", TUI.CP_ERR)
+        return None, []
+
+def _apple_docs_search(query):
+    """Search Apple Developer documentation via DDG site-restricted search."""
+    return _ddg_search(f"site:developer.apple.com {query}")
+
+def _product_docs_search(query):
+    """Search configured product documentation via DDG site-restricted search.
+    Requires PLATY_DOCS_SITES to be set in the environment."""
+    if not DOCS_SITES:
+        return None, []
+    return _ddg_search(f"({DOCS_SITES}) {query}")
+
+# Apple framework / API query detector — route to Apple docs instead of general web
+_APPLE_RE = re.compile(
+    r'\b(swift(ui|data|nio|lint)?|objective.?c|xcode|'
+    r'ios|ipados|macos|mac os|watchos|tvos|visionos|'
+    r'uikit|appkit|foundation|combine|'
+    r'core (data|ml|location|motion|bluetooth|nfc|image|animation|graphics)|'
+    r'arkit|realitykit|scenekit|spritekit|metal\b|'
+    r'nsuserdefaults|urlsession|nsmanagedobject|'
+    r'viewcontroller|appdelegate|scenedelegate|'
+    r'async.?await|swift actor|swift concurrency|'
+    r'(apple|ios|macos|swift)(ui)?\s+(api|framework|sdk|docs?|documentation|developer)|'
+    r'apple developer|developer\.apple\.com)\b',
+    re.IGNORECASE
+)
+
+# Product docs query detector — built from PLATY_DOCS_KEYWORDS env var.
+# Set PLATY_DOCS_KEYWORDS="jamf,jss,jamf pro" (comma-separated) to enable auto-routing.
+_DOCS_RE = None
+if DOCS_KEYWORDS:
+    _docs_kws = [k.strip() for k in DOCS_KEYWORDS.split(",") if k.strip()]
+    if _docs_kws:
+        _DOCS_RE = re.compile(
+            r'\b(' + '|'.join(re.escape(k) for k in _docs_kws) + r')\b',
+            re.IGNORECASE
+        )
+
+# Correction detector — user is telling the AI it got something wrong
+_CORRECTION_RE = re.compile(
+    r'^(no[,.]?\s+|nope[,.]?\s+|not (quite|exactly|right)[,.]?\s+|'
+    r'actually[,.]?\s+|that.s (wrong|incorrect|not right)[,.]?\s*|'
+    r'you.re (wrong|incorrect)[,.]?\s*|'
+    r'correction[,:]?\s+|wrong[,.]?\s+|incorrect[,.]?\s+)',
+    re.IGNORECASE
+)
+
+# Writing / editing tasks — never trigger web search; model should return clean text only
+_WRITING_RE = re.compile(
+    r'\b('
+    # Core rewrite verbs
+    r'rewrite|rephrase|paraphrase|reword|redraft|'
+    r'proofread|proof.read|'
+    # fix / correct — with grammar/spelling targets OR bare "fix this/it/my"
+    r'fix\s+(the\s+)?(grammar|spelling|punctuation|errors?|mistakes?|typos?|wording|phrasing)|'
+    r'(fix|correct|check|review)\s+(this|my|the|it)\b|'
+    r'fix\s+up\b|'
+    # clean / clean up
+    r'clean\s+(this|it|my|up)\b|'
+    # edit
+    r'edit\s+(this|the|my|it)\b|'
+    # improve (bare — user is implying text quality)
+    r'improve\s+(this|the|my|it)\b|'
+    # make more X (writing quality adjectives)
+    r'make\s+\w+\s+(more\s+)?(professional|concise|formal|clear|brief|shorter|readable|polished|crisp)\b|'
+    r'make\s+it\s+(professional|concise|formal|clear|brief|shorter|readable|polished|sound\s+better)\b|'
+    # standalone quality adjectives used as writing goals
+    r'(sound|be|look)\s+(more\s+)?(professional|formal|concise|polished|natural)\b|'
+    r'more\s+(professional|concise|formal|clear|brief|readable|polished)\b|'
+    # grammar / spell check (check-first order)
+    r'(check|correct)\s+(the\s+)?(grammar|spelling|punctuation|errors?|typos?)|'
+    r'grammar\s+(check|fix|correct)|spell.?check|'
+    # simplify / shorten / tighten / polish
+    r'(simplify|shorten|tighten|polish|sharpen)\s+(this|the|my|it|up)\b|'
+    r'shorter\s+version|make\s+(it|this)\s+shorter\b|'
+    # professional phrasing requests
+    r'professionally\s+(rewrite|written|worded|phrased|written)|'
+    r'professional\s+(tone|version|rewrite)\b|'
+    # "how does this sound" / "does this sound right"
+    r'how\s+does\s+this\s+sound\b|'
+    r'does\s+this\s+sound\b|'
+    # is this correct / clear / professional
+    r'is\s+this\s+(clear|correct|professional|ok|okay|right|proper|formal|appropriate)\b|'
+    # better way to say something
+    r'better\s+way\s+to\s+(say|word|phrase|write|express)\b|'
+    r'(say|word|phrase|express)\s+(this|it)\s+(better|more\s+clearly|differently|professionally)\b|'
+    # look over / review text
+    r'look\s+over\s+(this|my|the)\b|'
+    r'go\s+over\s+(this|my|the)\b'
+    r')\b',
+    re.IGNORECASE
+)
+
+def _is_writing_task(text):
+    """True when the user wants text edited/rewritten — skip web search for these."""
+    return bool(_WRITING_RE.search(text))
+
+_QUESTION_LEAD = re.compile(
+    r'^\s*(?:what|when|where|who|why|how|is|are|can|could|would|should|do|does|did|will)\b',
+    re.IGNORECASE
+)
+_COMMAND_LEAD = re.compile(
+    r'^\s*(?:write|create|fix|generate|make|build|run|show|list|find|search|'
+    r'explain|describe|translate|summarize|summarise|give|tell|help|check|update|add|remove)\b',
+    re.IGNORECASE
+)
+
+def _is_pasted_prose(text):
+    """True when the input looks like pasted text to work on (multi-line prose),
+    rather than a direct question, command, or instruction."""
+    if '\n' not in text or len(text) < 80 or text.startswith('/'):
+        return False
+    first = text.split('\n')[0].strip()
+    if _QUESTION_LEAD.match(first) or first.endswith('?'):
+        return False
+    if _COMMAND_LEAD.match(first):
+        return False
+    return True
+
+# Queries answered by live system context — no web search needed
+_SYS_CTX_RE = re.compile(
+    r'\b(what (time|day|date|year) is it|what.s the (time|date|day)|'
+    r'current time|current date|what time (is it|now)|'
+    r'(check |show |list |view )?(my )?(calendar|schedule|events?|appointments?|meetings?)'
+    r'(\s+(today|tomorrow|this week|for today|scheduled|upcoming))?|'
+    r'do i have (any |a )?(event|meeting|appointment|cal)|'
+    r'(today.s|tomorrow.s) (schedule|calendar|events?|meetings?)|'
+    r'what.s (on my|my) (calendar|schedule|agenda)|'
+    r'am i (free|busy)|any (events?|meetings?) (today|tomorrow|this week))\b',
+    re.IGNORECASE
+)
+
+# Questions about platy itself — answered from the system prompt, not the web
+_PLATY_RE = re.compile(
+    r'\b(platypus\s+fallacy|'
+    r'what\s+(is\s+)?platy\b|how\s+does\s+platy\b|'
+    r'platy\s+(feature|command|mode|session|memory|mascot|help|do|can|work)|'
+    r'(what|how)\s+(can|does|do|did)\s+platy\b)\b',
+    re.IGNORECASE
+)
+
+def needs_search(text):
+    if _SYS_CTX_RE.search(text):
+        return False   # answered by injected system context
+    if _PLATY_RE.search(text):
+        return False   # answered from system prompt knowledge
+    return bool(_SEARCH_RE.search(text))
+
+# ── The Platypus Fallacy detector ────────────────────────────────────────────
+# Catches confident-sounding statements whose internal logic collapses on inspection.
+# Named after observing the AI claim a platypus "lacks fur like reptiles" —
+# a comparison that is wrong on both ends simultaneously.
+
+_FALLACY_CHECKS = [
+    # Broad logical contradictions — things no model should ever get wrong.
+    # (pattern, plain-English correction shown to the user)
+    (re.compile(r'reptile[s]?\b.{0,60}\bfur\b',          re.I), "reptiles do not have fur"),
+    (re.compile(r'fur\b.{0,60}\blike\b.{0,30}\breptile', re.I), "reptiles do not have fur"),
+    (re.compile(r'bird[s]?\b.{0,60}\bteeth\b',           re.I), "modern birds do not have teeth"),
+    (re.compile(r'fish\b.{0,60}\blungs?\b(?!.*lungfish)', re.I), "most fish do not have lungs"),
+    (re.compile(r'insect[s]?\b.{0,60}\bbone[s]?\b',      re.I), "insects have no bones"),
+    (re.compile(r'plant[s]?\b.{0,60}\bbrain[s]?\b',      re.I), "plants do not have brains"),
+    (re.compile(r'mammal[s]?\b.{0,60}\bcold.blooded',    re.I), "mammals are warm-blooded"),
+    (re.compile(r'reptile[s]?\b.{0,60}\bwarm.blooded',   re.I), "reptiles are cold-blooded"),
+    # Environmental exposure causing impossible physical transformation in humans
+    (re.compile(
+        r'(exposure|contamination|chemical[s]?|pollut\w+|radiation)\b.{0,100}'
+        r'\b(grow(ing)?|develop(ing)?|caus\w+|result\w+|lead\w*)\b.{0,80}'
+        r'\b(human[s]?|people|person|resident[s]?|victim[s]?)\b.{0,80}'
+        r'\b(physical\s+change[s]?|transform\w*|mutate[sd]?|evolve[sd]?|'
+        r'animal\s+feature[s]?|aquatic\s+feature[s]?)',
+        re.I | re.DOTALL),
+     "environmental exposure cannot cause impossible physical transformations — "
+     "this may be fiction being described as real"),
+]
+
+def _check_hallucinations(text):
+    """Detect The Platypus Fallacy — confident claims whose logic collapses on inspection."""
+    warnings = []
+    for pattern, correction in _FALLACY_CHECKS:
+        if pattern.search(text):
+            warnings.append(correction)
+    return warnings
+
+
+# ── Numbered-option extraction ─────────────────────────────────────────────────
+
+_OPT_RE = re.compile(r'^\s{0,4}(\d+)[.)]\s+(.+)', re.MULTILINE)
+
+def extract_options(text):
+    """Return list of option strings if the response contains a numbered list (2-8 items)."""
+    matches = _OPT_RE.findall(text)
+    if len(matches) < 2 or len(matches) > 8:
+        return []
+    # Ensure numbering is sequential starting at 1
+    nums = [int(n) for n, _ in matches]
+    if nums != list(range(1, len(nums) + 1)):
+        return []
+    return [t.strip() for _, t in matches]
+
+# ── Command fuzzy-correction ───────────────────────────────────────────────────
+
+_KNOWN_CMDS = [
+    "/web", "/apple", "/docs", "/model", "/auto", "/read", "/write", "/clear", "/exit",
+    "/help", "/sessions", "/load", "/serper", "/think", "/sources",
+    "/pin", "/learn", "/forget", "/memory",
+]
+
+def _fix_command(text):
+    """Auto-correct a mistyped slash command. Returns corrected text."""
+    if not text.startswith("/"):
+        return text
+    parts = text.split(None, 1)
+    cmd   = parts[0].lower()
+    if cmd in _KNOWN_CMDS:
+        return text
+    close = difflib.get_close_matches(cmd, _KNOWN_CMDS, n=1, cutoff=0.55)
+    if close:
+        return close[0] + (" " + parts[1] if len(parts) > 1 else "")
+    return text
+
+# ── Ollama / model helpers ─────────────────────────────────────────────────────
+
+def get_models():
+    """Local ollama models first, Claude API models listed last as opt-in."""
+    out = []
+    try:
+        with urlopen(Request(f"{API_BASE}/api/tags"), timeout=5) as resp:
+            data = json.loads(resp.read())
+            for m in data.get("models", []):
+                raw = m.get("size", 0)
+                gb  = raw / 1_073_741_824
+                sz  = f"{gb:.1f} GB" if gb >= 1 else f"{raw/1_048_576:.0f} MB"
+                out.append((m["name"], sz))
+    except Exception:
+        pass
+    if not out:
+        out.append((DEFAULT_MODEL, ""))
+    # Claude models appended last — available but never auto-selected
+    if ANTHROPIC_KEY:
+        out.extend(CLAUDE_MODELS)
+    return out
+
+# ── TUI ────────────────────────────────────────────────────────────────────────
+
+_ui = None   # set inside _tui_main(); None in one-shot mode
+
+
+class TUI:
+    CP_NORMAL = 1   # white
+    CP_STATUS = 2   # white on blue  (header bar)
+    CP_USER   = 3   # yellow bold    (user turn label)
+    CP_AI     = 4   # white          (AI response)
+    CP_OK     = 5   # green          (success / confident fact)
+    CP_ERR    = 6   # red            (errors / Platypus Fallacy)
+    CP_INFO   = 7   # dim white      (info / separators)
+    CP_CYAN   = 8   # cyan           (accents)
+    CP_WARN   = 9   # yellow         (uncertain / unverified)
+
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self._lock  = threading.Lock()
+
+        self._lines        = []   # list of (cp, text, bold)
+        self._pinned_lines = []   # always-visible lines at top (mascot + help)
+        self._scroll       = 0   # lines from bottom (0 = at bottom)
+
+        self._model   = DEFAULT_MODEL
+        self._session = ""
+        self._spin_text   = ""
+        self._spin_active = False
+
+        self._history        = []   # entered commands
+        self._last_paste_range = None
+        self._h = self._w = 0
+
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(self.CP_NORMAL, curses.COLOR_WHITE,  -1)
+        curses.init_pair(self.CP_STATUS, curses.COLOR_WHITE,  curses.COLOR_BLUE)
+        curses.init_pair(self.CP_USER,   curses.COLOR_YELLOW, -1)
+        curses.init_pair(self.CP_AI,     curses.COLOR_WHITE,  -1)
+        curses.init_pair(self.CP_OK,     curses.COLOR_GREEN,  -1)
+        curses.init_pair(self.CP_ERR,    curses.COLOR_RED,    -1)
+        curses.init_pair(self.CP_INFO,   curses.COLOR_WHITE,  -1)
+        curses.init_pair(self.CP_CYAN,   curses.COLOR_CYAN,   -1)
+        curses.init_pair(self.CP_WARN,   curses.COLOR_YELLOW, -1)
+
+        stdscr.keypad(True)
+        curses.curs_set(1)
+        # Bracketed paste mode: terminal wraps pasted text with ESC[200~ / ESC[201~
+        # so we can accumulate the whole block before acting on it.
+        # Mouse capture is intentionally NOT set — any mousemask() call puts the
+        # terminal into mouse-tracking mode and prevents click-and-drag text selection.
+        # Trackpad scroll reaches us as KEY_UP/KEY_DOWN in alternate-screen mode instead.
+        try:
+            curses.define_key("\x1b[200~", 510)  # paste-start marker
+            curses.define_key("\x1b[201~", 511)  # paste-end   marker
+            curses.define_key("\x1b[1;2A", 512)  # Shift+Up   → scroll up
+            curses.define_key("\x1b[1;2B", 513)  # Shift+Down → scroll down
+        except Exception:
+            pass
+        # Enable bracketed paste in the terminal emulator
+        sys.stdout.write("\x1b[?2004h")
+        sys.stdout.flush()
+        self._resize()
+
+    # ── sizing ─────────────────────────────────────────────────────────────────
+
+    def _resize(self):
+        self._h, self._w = self.stdscr.getmaxyx()
+
+    @property
+    def _chat_rows(self):
+        """Rows available for chat (between status bar and input row)."""
+        return max(1, self._h - 3)  # status(1) + separator(1) + input(1)
+
+    @property
+    def _scroll_rows(self):
+        """Rows available for scrollable content (chat_rows minus pinned header and pin-separator)."""
+        return max(1, self._chat_rows - len(self._pinned_lines) - 1)
+
+    # ── public API ─────────────────────────────────────────────────────────────
+
+    def set_header(self, model, session):
+        self._model   = model
+        self._session = session
+
+    def add(self, text, cp=None, bold=False, dim=False):
+        """Append a completed line to the chat area. Thread-safe."""
+        if cp is None:
+            cp = self.CP_AI
+        with self._lock:
+            self._hard_wrap_append(text, cp, bold, dim=dim)
+            if self._scroll == 0:
+                self._render()
+
+    def clear_chat(self):
+        """Erase all chat lines and redraw."""
+        with self._lock:
+            self._lines.clear()
+            self._scroll = 0
+            self._render()
+
+    def pin(self, text, cp=None, bold=False):
+        """Append a line to the always-visible pinned header (mascot/help). Not scrollable."""
+        if cp is None:
+            cp = self.CP_CYAN
+        max_w = max(1, self._w - 3)
+        if not text:
+            self._pinned_lines.append((cp, "", bold))
+            return
+        while len(text) > max_w:
+            self._pinned_lines.append((cp, text[:max_w], bold))
+            text = text[max_w:]
+        self._pinned_lines.append((cp, text, bold))
+
+    def spin_update(self, text):
+        """Update spinner text in status bar. Safe to call from any thread."""
+        self._spin_text   = text
+        self._spin_active = True
+        with self._lock:
+            self._render_status()
+            self.stdscr.noutrefresh()
+            curses.doupdate()
+
+    def spin_stop(self):
+        """Clear spinner, restore normal status bar."""
+        self._spin_active = False
+        self._spin_text   = ""
+        with self._lock:
+            self._render_status()
+            self.stdscr.noutrefresh()
+            curses.doupdate()
+
+    def redraw(self):
+        """Full redraw. Thread-safe."""
+        with self._lock:
+            self._render()
+
+    # ── internal rendering ─────────────────────────────────────────────────────
+
+    def _hard_wrap_append(self, text, cp, bold, dim=False):
+        """Append text with markdown parsing, word-wrapping at terminal width. Must hold _lock."""
+        # Strip newlines — curses addstr will bleed onto adjacent rows otherwise
+        text = text.replace("\r", "").replace("\n", " ").strip()
+        max_w = max(1, self._w - 3)
+        if not text:
+            self._lines.append((cp, "", bold, None, dim))
+            return
+        plain, cp, bold, segs = _parse_md_segs(text, cp)
+        # If segs fit on one line, store rich
+        if segs and len(plain) <= max_w:
+            self._lines.append((cp, plain, bold, segs, dim))
+            return
+        # Short enough to fit — store as-is
+        if len(plain) <= max_w:
+            self._lines.append((cp, plain, bold, None, dim))
+            return
+        # Word-boundary wrapping
+        words = plain.split(' ')
+        current = ''
+        for word in words:
+            if not word:
+                continue
+            if current and len(current) + 1 + len(word) > max_w:
+                self._lines.append((cp, current, bold, None, dim))
+                current = word
+            elif current:
+                current = current + ' ' + word
+            else:
+                # Single word longer than max_w — hard-break it
+                while len(word) > max_w:
+                    self._lines.append((cp, word[:max_w], bold, None, dim))
+                    word = word[max_w:]
+                current = word
+        if current:
+            self._lines.append((cp, current, bold, None, dim))
+
+    def _render_status(self):
+        """Draw status bar at row 0. Must hold _lock."""
+        w = self._w
+        right = (f"  {self._spin_text}  " if self._spin_active
+                 else (f"  {self._session}  " if self._session else "    "))
+        left  = f"  PLATY  ·  {self._model}  "
+        fill  = "·" * max(0, w - len(left) - len(right))
+        bar   = (left + fill + right)[:w]
+        try:
+            self.stdscr.addstr(0, 0, bar,
+                               curses.color_pair(self.CP_STATUS) | curses.A_BOLD)
+        except curses.error:
+            pass
+
+    def _render(self):
+        """Full screen redraw. Must hold _lock."""
+        try:
+            h, w = self._h, self._w
+            chat_rows   = self._chat_rows
+            num_pinned  = len(self._pinned_lines)
+            scroll_rows = self._scroll_rows
+
+            self._render_status()
+
+            # ── pinned header (mascot + help) — never scrollable ──────────────
+            for i, (cp, text, bold) in enumerate(self._pinned_lines):
+                row = 1 + i
+                if row >= h - 2:
+                    break
+                try:
+                    self.stdscr.move(row, 0)
+                    self.stdscr.clrtoeol()
+                    if text:
+                        attr = curses.color_pair(cp)
+                        if bold:
+                            attr |= curses.A_BOLD
+                        self.stdscr.addstr(row, 0, ("  " + text)[:w - 1], attr)
+                except curses.error:
+                    pass
+
+            # ── fixed separator between header and chat ────────────────────────
+            pin_sep_row = 1 + num_pinned
+            if pin_sep_row < h - 2:
+                try:
+                    self.stdscr.move(pin_sep_row, 0)
+                    self.stdscr.clrtoeol()
+                    self.stdscr.addstr(pin_sep_row, 0, "═" * (w - 1),
+                                       curses.color_pair(self.CP_CYAN) | curses.A_DIM)
+                except curses.error:
+                    pass
+
+            # ── scrollable chat area (starts one row below the pin separator) ──
+            total = len(self._lines)
+            max_scroll = max(0, total - scroll_rows)
+            self._scroll = min(self._scroll, max_scroll)
+
+            if total <= scroll_rows and self._scroll == 0:
+                start_idx = 0
+            else:
+                end_idx   = total - self._scroll
+                start_idx = max(0, end_idx - scroll_rows)
+
+            for i in range(scroll_rows):
+                row = 2 + num_pinned + i   # +2: status(1) + pin-sep(1)
+                if row >= h - 2:
+                    break
+                idx = start_idx + i
+                try:
+                    self.stdscr.move(row, 0)
+                    self.stdscr.clrtoeol()
+                except curses.error:
+                    pass
+                if 0 <= idx < total:
+                    entry = self._lines[idx]
+                    cp, text, bold, segs = entry[:4]
+                    dim = entry[4] if len(entry) > 4 else False
+                    if segs:
+                        # Rich inline rendering (bold/code segments)
+                        x = 2
+                        for seg_text, seg_cp, seg_attrs in segs:
+                            avail = max(0, w - 1 - x)
+                            if avail <= 0:
+                                break
+                            clipped = seg_text[:avail]
+                            try:
+                                self.stdscr.addstr(row, x, clipped,
+                                    curses.color_pair(seg_cp) | seg_attrs)
+                                x += len(clipped)
+                            except curses.error:
+                                break
+                    else:
+                        attr = curses.color_pair(cp)
+                        if bold:
+                            attr |= curses.A_BOLD
+                        if dim:
+                            attr |= curses.A_DIM
+                        try:
+                            self.stdscr.addstr(row, 0, ("  " + text)[:w - 1], attr)
+                        except curses.error:
+                            pass
+
+            # ── separator row ─────────────────────────────────────────────────
+            sep_row = 1 + chat_rows
+            try:
+                self.stdscr.addstr(sep_row, 0, "─" * (w - 1),
+                                   curses.color_pair(self.CP_INFO) | curses.A_DIM)
+                if self._scroll > 0:
+                    ind = f" ↑ {self._scroll} lines  PgDn ↓ "
+                    self.stdscr.addstr(sep_row, 2, ind,
+                                       curses.color_pair(self.CP_CYAN))
+                if _clip_changed:
+                    hint = " 📋 clipboard changed · /paste "
+                    col  = max(2, w - len(hint) - 2)
+                    self.stdscr.addstr(sep_row, col, hint,
+                                       curses.color_pair(self.CP_CYAN) | curses.A_DIM)
+            except curses.error:
+                pass
+
+        except curses.error:
+            pass
+        finally:
+            try:
+                self.stdscr.noutrefresh()
+                curses.doupdate()
+            except curses.error:
+                pass
+
+    # ── input ──────────────────────────────────────────────────────────────────
+
+    def get_input(self):
+        """
+        Full-featured line editor on the bottom row.
+        Keys: arrows, Home/End, Ctrl+A/E/K/U/W, Backspace, Delete,
+              Ctrl+B (copy last response), Ctrl+D (quit),
+              PgUp/PgDn (scroll chat), Up/Dn (history when typing, scroll when empty).
+        Paste: bracketed-paste mode lets you paste multi-line blocks as one query.
+        Returns entered string, or None on Ctrl+D.
+        """
+        buf         = []
+        cursor      = 0
+        hist_idx    = len(self._history)
+        saved_buf   = ""
+        _in_paste   = False  # True while inside a bracketed-paste block
+        paste_mark  = 0      # buf index where paste will be inserted
+        paste_chars = []     # accumulates chars DURING paste (kept out of buf until end)
+        paste_range = None   # (start, end) in buf after paste is committed; None = no paste
+
+        prompt_str = "● ▸ "
+        prompt_len = len(prompt_str)
+        input_row  = self._h - 1
+        max_input  = self._w - prompt_len - 2
+        offset     = 0
+
+        curses.curs_set(1)
+
+        def render():
+            nonlocal offset
+            try:
+                self.stdscr.move(input_row, 0)
+                self.stdscr.clrtoeol()
+                self.stdscr.addstr(input_row, 0, prompt_str,
+                                   curses.color_pair(self.CP_OK) | curses.A_BOLD)
+                if paste_range is not None:
+                    ps, pe = paste_range
+                    pasted  = "".join(buf[ps:pe])
+                    n_words = len(pasted.split())
+                    n_lines = pasted.count("\n") + 1
+                    label       = f"[Pasted text · {n_words} words · {n_lines} lines]"
+                    pre         = "".join(buf[:ps])
+                    post        = "".join(buf[pe:])
+                    display     = pre + label + post
+                    label_start = len(pre)
+                    label_end   = label_start + len(label)
+                    # Map logical cursor → display cursor
+                    if cursor <= ps:
+                        disp_cur = cursor
+                    elif cursor <= pe:
+                        disp_cur = label_end
+                    else:
+                        disp_cur = cursor - (pe - ps) + len(label)
+                    # Window
+                    if disp_cur - offset >= max_input:
+                        offset = disp_cur - max_input + 1
+                    elif disp_cur - offset < 0:
+                        offset = disp_cur
+                    # Render char by char so label colouring works cleanly
+                    x = prompt_len
+                    for i, glyph in enumerate(display[offset:offset + max_input]):
+                        abs_i = offset + i
+                        if label_start <= abs_i < label_end:
+                            attr = curses.color_pair(self.CP_USER) | curses.A_DIM
+                        else:
+                            attr = curses.color_pair(self.CP_NORMAL)
+                        try:
+                            self.stdscr.addstr(input_row, x, glyph, attr)
+                        except curses.error:
+                            break
+                        x += 1
+                    self.stdscr.move(input_row,
+                                     min(prompt_len + disp_cur - offset,
+                                         prompt_len + max_input - 1))
+                else:
+                    if cursor - offset >= max_input:
+                        offset = cursor - max_input + 1
+                    elif cursor - offset < 0:
+                        offset = cursor
+                    visible = "".join(buf[offset:offset + max_input])
+                    self.stdscr.addstr(input_row, prompt_len, visible,
+                                       curses.color_pair(self.CP_NORMAL))
+                    self.stdscr.move(input_row, prompt_len + cursor - offset)
+                self.stdscr.noutrefresh()
+                curses.doupdate()
+            except curses.error:
+                pass
+
+        self.stdscr.nodelay(False)
+        render()
+
+        while True:
+            try:
+                ch = self.stdscr.getch()
+            except KeyboardInterrupt:
+                raise
+
+            if ch == curses.KEY_RESIZE:
+                self._resize()
+                input_row  = self._h - 1
+                max_input  = self._w - prompt_len - 2
+                with self._lock:
+                    self._render()
+                render()
+
+            elif ch in (curses.KEY_PPAGE, 566, 512):  # PgUp / Ctrl+Up / Shift+Up
+                with self._lock:
+                    step = 3 if ch in (566, 512) else self._scroll_rows // 2
+                    self._scroll = min(self._scroll + step,
+                                       max(0, len(self._lines) - self._scroll_rows))
+                    self._render()
+                render()
+
+            elif ch in (curses.KEY_NPAGE, 525, 513):  # PgDn / Ctrl+Down / Shift+Down
+                with self._lock:
+                    step = 3 if ch in (525, 513) else self._scroll_rows // 2
+                    self._scroll = max(0, self._scroll - step)
+                    self._render()
+                render()
+
+            elif ch == 510:          # bracketed-paste START
+                _in_paste   = True
+                paste_mark  = cursor
+                paste_chars = []
+
+            elif ch == 511:          # bracketed-paste END
+                _in_paste = False
+                for i, c in enumerate(paste_chars):
+                    buf.insert(paste_mark + i, c)
+                cursor      = paste_mark + len(paste_chars)
+                paste_range = (paste_mark, cursor)
+                paste_chars = []
+                render()
+
+            elif ch in (curses.KEY_ENTER, ord('\n'), ord('\r')):
+                if _in_paste:
+                    # Paste in progress — newline goes to paste accumulator, not buf
+                    paste_chars.append('\n')
+                    continue
+                # Peek ahead: paste bursts arrive as a flood of chars with no gap.
+                # If input is immediately available, this \n is mid-paste — treat
+                # it as a literal newline in the buffer, not a submit trigger.
+                # Also handles \r\n (Windows line endings) — skip bare \r.
+                self.stdscr.nodelay(True)
+                _peek = self.stdscr.getch()
+                self.stdscr.nodelay(False)
+                if _peek == ord('\r'):
+                    # CR from Windows paste — discard it and read one more
+                    self.stdscr.nodelay(True)
+                    _peek = self.stdscr.getch()
+                    self.stdscr.nodelay(False)
+                if _peek != -1:
+                    buf.insert(cursor, '\n')
+                    cursor += 1
+                    curses.ungetch(_peek)   # put the peeked char back
+                    render()
+                    continue
+                # Nothing follows immediately → real Enter key, submit the buffer
+                global _clip_changed
+                _clip_changed = False
+                raw  = "".join(buf)
+                line = raw.strip()
+                line = re.sub(r'\x1b?\[20[01]~', '', line)
+                # Store paste_range adjusted for any leading whitespace stripped,
+                # so print_user can reconstruct pre + label + post for display.
+                if paste_range is not None:
+                    leading = len(raw) - len(raw.lstrip())
+                    ps, pe  = paste_range
+                    self._last_paste_range = (max(0, ps - leading),
+                                              max(0, pe - leading))
+                else:
+                    self._last_paste_range = None
+                paste_range = None
+                if line:
+                    self._history.append(line)
+                try:
+                    self.stdscr.move(input_row, 0)
+                    self.stdscr.clrtoeol()
+                    self.stdscr.noutrefresh()
+                    curses.doupdate()
+                except curses.error:
+                    pass
+                return line
+
+            elif ch == 4:   # Ctrl+D
+                return None
+
+            elif ch == 3:   # Ctrl+C
+                raise KeyboardInterrupt
+
+            elif ch == 2:   # Ctrl+B — copy/show last AI response + sources
+                if _last_ai_response:
+                    clip_text = _last_ai_response
+                    if _last_sources:
+                        lines = ["\n\nsources:"]
+                        for i, (title, url) in enumerate(_last_sources, 1):
+                            lines.append(f"[{i}] {title}")
+                            lines.append(f"    {url}")
+                        clip_text += "\n".join(lines)
+                    ok, method = _copy_to_clipboard(clip_text)
+                    if ok:
+                        src_note = f" + {len(_last_sources)} sources" if _last_sources else ""
+                        with self._lock:
+                            self._spin_text   = f"✓  response{src_note} copied to clipboard"
+                            self._spin_active = True
+                            self._render_status()
+                            self.stdscr.noutrefresh()
+                            curses.doupdate()
+                        time.sleep(1.5)
+                        with self._lock:
+                            self._spin_active = False
+                            self._spin_text   = ""
+                            self._render_status()
+                            self.stdscr.noutrefresh()
+                            curses.doupdate()
+                    elif method == "ssh":
+                        # SSH session — suspend curses and print as plain text
+                        # so the user can mouse-select and copy normally
+                        curses.endwin()
+                        print(f"\n{CYAN}{'─' * 60}{R}")
+                        print(clip_text)
+                        print(f"{CYAN}{'─' * 60}{R}")
+                        print(f"\n{DGRAY}select the text above to copy  ·  press Enter to return{R}")
+                        try:
+                            sys.stdin.readline()
+                        except Exception:
+                            pass
+                        self.stdscr = curses.initscr()
+                        curses.noecho()
+                        curses.cbreak()
+                        self.stdscr.keypad(True)
+                        with self._lock:
+                            self._render()
+                render()
+
+            elif ch == curses.KEY_UP:
+                if not buf:
+                    # Empty input → scroll chat up (macOS Terminal sends trackpad
+                    # scroll-up as KEY_UP in alternate-screen mode)
+                    with self._lock:
+                        self._scroll = min(self._scroll + 3,
+                                           max(0, len(self._lines) - self._scroll_rows))
+                        self._render()
+                    render()
+                elif hist_idx > 0:
+                    if hist_idx == len(self._history):
+                        saved_buf = "".join(buf)
+                    hist_idx   -= 1
+                    buf         = list(self._history[hist_idx])
+                    cursor      = len(buf)
+                    paste_range = None
+                    render()
+
+            elif ch == curses.KEY_DOWN:
+                if not buf:
+                    # Empty input → scroll chat down
+                    with self._lock:
+                        self._scroll = max(0, self._scroll - 3)
+                        self._render()
+                    render()
+                elif hist_idx < len(self._history):
+                    hist_idx += 1
+                    if hist_idx == len(self._history):
+                        buf = list(saved_buf)
+                    else:
+                        buf = list(self._history[hist_idx])
+                    cursor      = len(buf)
+                    paste_range = None
+                    render()
+
+            elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                if paste_range is not None:
+                    ps, pe = paste_range
+                    if cursor == pe:
+                        # Backspace onto label — wipe the entire paste block
+                        del buf[ps:pe]
+                        paste_range = None
+                        cursor      = ps
+                    elif cursor > pe:
+                        buf.pop(cursor - 1)
+                        cursor -= 1
+                    elif cursor > 0:
+                        buf.pop(cursor - 1)
+                        cursor -= 1
+                elif cursor > 0:
+                    buf.pop(cursor - 1)
+                    cursor -= 1
+                render()
+
+            elif ch == curses.KEY_DC:
+                if paste_range is not None:
+                    ps, pe = paste_range
+                    if cursor == ps:
+                        # Delete-forward onto label — wipe the entire paste block
+                        del buf[ps:pe]
+                        paste_range = None
+                    elif cursor < len(buf):
+                        buf.pop(cursor)
+                elif cursor < len(buf):
+                    buf.pop(cursor)
+                render()
+
+            elif ch == curses.KEY_LEFT:
+                if paste_range is not None:
+                    ps, pe = paste_range
+                    if cursor == pe:
+                        cursor = ps   # jump over label as one unit
+                    elif cursor > pe:
+                        cursor -= 1
+                    elif cursor > 0:
+                        cursor -= 1
+                else:
+                    cursor = max(0, cursor - 1)
+                render()
+
+            elif ch in (curses.KEY_RIGHT, 6):
+                if paste_range is not None:
+                    ps, pe = paste_range
+                    if cursor == ps:
+                        cursor = pe   # jump over label as one unit
+                    elif cursor < len(buf):
+                        cursor += 1
+                else:
+                    cursor = min(len(buf), cursor + 1)
+                render()
+
+            elif ch in (curses.KEY_HOME, 1):
+                cursor = 0
+                render()
+
+            elif ch in (curses.KEY_END, 5):
+                cursor = len(buf)
+                render()
+
+            elif ch == 11:  # Ctrl+K
+                if paste_range is not None:
+                    ps, pe = paste_range
+                    if cursor <= pe:
+                        paste_range = None
+                buf[cursor:] = []
+                render()
+
+            elif ch == 21:  # Ctrl+U
+                buf[:cursor] = []
+                paste_range = None
+                cursor = 0
+                render()
+
+            elif ch == 23:  # Ctrl+W
+                while cursor > 0 and buf[cursor - 1] == ' ':
+                    buf.pop(cursor - 1); cursor -= 1
+                while cursor > 0 and buf[cursor - 1] != ' ':
+                    buf.pop(cursor - 1); cursor -= 1
+                render()
+
+            elif 32 <= ch <= 126 or (_in_paste and ch > 126):
+                if _in_paste:
+                    # Paste in progress — accumulate separately so buf stays newline-free
+                    paste_chars.append(chr(ch))
+                    try:
+                        ptail = "".join(paste_chars[-6:])
+                        if ptail.endswith("[201~"):
+                            mlen = 6 if ptail.endswith("\x1b[201~") else 5
+                            del paste_chars[-mlen:]
+                            for i, c in enumerate(paste_chars):
+                                buf.insert(paste_mark + i, c)
+                            cursor      = paste_mark + len(paste_chars)
+                            paste_range = (paste_mark, cursor)
+                            paste_chars = []
+                            _in_paste   = False
+                    except Exception:
+                        pass
+                else:
+                    buf.insert(cursor, chr(ch))
+                    cursor += 1
+                    # Detect [200~ leaking as plain chars when define_key misses it.
+                    # ESC (27) is dropped by curses; [200~ passes through as text.
+                    try:
+                        tail = "".join(buf[max(0, cursor - 6):cursor])
+                        if tail.endswith("[200~"):
+                            mlen        = 6 if "\x1b[200~" in tail else 5
+                            del buf[cursor - mlen:cursor]
+                            cursor     -= mlen
+                            _in_paste   = True
+                            paste_mark  = cursor
+                            paste_chars = []
+                    except Exception:
+                        pass
+                render()
+
+    def prompt(self, question):
+        """
+        Show a question on the input row and return a short answer.
+        Used for confirmations and one-liner inputs inside commands.
+        """
+        input_row = self._h - 1
+        q_str = f"  {question} "
+        try:
+            self.stdscr.move(input_row, 0)
+            self.stdscr.clrtoeol()
+            self.stdscr.addstr(input_row, 0, q_str[:self._w - 1],
+                               curses.color_pair(self.CP_CYAN) | curses.A_BOLD)
+            self.stdscr.noutrefresh()
+            curses.doupdate()
+        except curses.error:
+            pass
+        curses.flushinp()
+        return _inline_input(self.stdscr, input_row, len(q_str), self._w)
+
+    def choose(self, options=("Yes", "No", "Add context"), default=1):
+        """
+        Render a horizontal button strip on the input row.
+        ◀/▶ or left/right moves the highlight; Enter confirms.
+        Returns the selected option string, or "" on Escape.
+        If "Add context" is chosen, drops into a text-input and returns the typed text.
+        """
+        sel      = default
+        row      = self._h - 1
+        curses.flushinp()
+
+        def _draw(sel):
+            try:
+                self.stdscr.move(row, 0)
+                self.stdscr.clrtoeol()
+                x = 2
+                for i, opt in enumerate(options):
+                    if i == sel:
+                        label = f" ● {opt} "
+                        attr  = curses.color_pair(self.CP_OK) | curses.A_BOLD | curses.A_REVERSE
+                    else:
+                        label = f"   {opt} "
+                        attr  = curses.color_pair(self.CP_INFO)
+                    if x + len(label) < self._w:
+                        self.stdscr.addstr(row, x, label, attr)
+                    x += len(label) + 1
+                self.stdscr.noutrefresh()
+                curses.doupdate()
+            except curses.error:
+                pass
+
+        while True:
+            _draw(sel)
+            try:
+                key = self.stdscr.getch()
+            except curses.error:
+                return ""
+
+            if key in (curses.KEY_LEFT, ord('h')):
+                sel = (sel - 1) % len(options)
+            elif key in (curses.KEY_RIGHT, ord('l')):
+                sel = (sel + 1) % len(options)
+            elif key in (10, 13, curses.KEY_ENTER):       # Enter
+                chosen = options[sel]
+                if chosen == "Add context":
+                    # switch to free-text input on the same row
+                    try:
+                        self.stdscr.move(row, 0)
+                        self.stdscr.clrtoeol()
+                        prompt = "  context: "
+                        self.stdscr.addstr(row, 0, prompt,
+                                           curses.color_pair(self.CP_CYAN) | curses.A_BOLD)
+                        self.stdscr.noutrefresh()
+                        curses.doupdate()
+                    except curses.error:
+                        pass
+                    return _inline_input(self.stdscr, row, len("  context: "), self._w)
+                return chosen
+            elif key == 27:                                # Escape → default
+                return options[default]
+
+    def option_select(self, options):
+        """
+        Show an arrow-key navigable selector for a numbered list returned by the AI.
+        Up/down (or j/k) moves selection; Enter sends it; Esc dismisses.
+        Returns the chosen option text, or None if dismissed.
+        """
+        if not options:
+            return None
+        sel = 0
+        row = self._h - 1
+        hint = "  ↑↓ select option  ·  Enter to send  ·  Esc to type manually"
+        curses.flushinp()
+
+        def _draw():
+            try:
+                self.stdscr.move(row, 0)
+                self.stdscr.clrtoeol()
+                num   = f"[{sel + 1}/{len(options)}] "
+                label = (num + options[sel])[:self._w - len(hint) - 4]
+                line  = f"  {label:<{self._w - len(hint) - 4}}{hint}"
+                self.stdscr.addstr(row, 0, line[:self._w - 1],
+                                   curses.color_pair(self.CP_OK) | curses.A_BOLD)
+                self.stdscr.noutrefresh()
+                curses.doupdate()
+            except curses.error:
+                pass
+
+        while True:
+            _draw()
+            try:
+                key = self.stdscr.getch()
+            except curses.error:
+                return None
+            if key in (curses.KEY_UP, ord('k')):
+                sel = (sel - 1) % len(options)
+            elif key in (curses.KEY_DOWN, ord('j')):
+                sel = (sel + 1) % len(options)
+            elif key in (10, 13, curses.KEY_ENTER):
+                return options[sel]
+            elif key == 27:
+                return None
+
+
+# ── Inline mini-input (used by prompt() and session_manager) ──────────────────
+
+def _inline_input(stdscr, row, col, max_w):
+    """Minimal in-place line input. Returns entered string."""
+    buf       = []
+    max_chars = max(1, max_w - col - 1)
+
+    curses.curs_set(1)
+
+    def render():
+        try:
+            stdscr.move(row, col)
+            stdscr.clrtoeol()
+            visible = "".join(buf)[-max_chars:]
+            stdscr.addstr(row, col, visible)
+            stdscr.move(row, col + min(len(buf), max_chars))
+            stdscr.noutrefresh()
+            curses.doupdate()
+        except curses.error:
+            pass
+
+    render()
+
+    while True:
+        try:
+            ch = stdscr.getch()
+        except KeyboardInterrupt:
+            return ""
+        if ch in (curses.KEY_ENTER, ord('\n'), ord('\r')):
+            return "".join(buf)
+        elif ch in (27, 4):
+            return ""
+        elif ch == 3:
+            return ""
+        elif ch in (curses.KEY_BACKSPACE, 127, 8):
+            if buf:
+                buf.pop()
+        elif 32 <= ch <= 126:
+            buf.append(chr(ch))
+        render()
+
+
+def _inline_input_prefill(stdscr, row, col, max_w, prefill=""):
+    """Like _inline_input but with pre-filled text the user can edit."""
+    buf       = list(prefill)
+    max_chars = max(1, max_w - col - 1)
+
+    curses.curs_set(1)
+
+    def render():
+        try:
+            stdscr.move(row, col)
+            stdscr.clrtoeol()
+            visible = "".join(buf)[-max_chars:]
+            stdscr.addstr(row, col, visible)
+            stdscr.move(row, col + min(len(buf), max_chars))
+            stdscr.noutrefresh()
+            curses.doupdate()
+        except curses.error:
+            pass
+
+    render()
+
+    while True:
+        try:
+            ch = stdscr.getch()
+        except KeyboardInterrupt:
+            return prefill
+        if ch in (curses.KEY_ENTER, ord('\n'), ord('\r')):
+            return "".join(buf)
+        elif ch in (27, 4):
+            return prefill   # Esc → cancel, restore original
+        elif ch == 3:
+            return prefill
+        elif ch in (curses.KEY_BACKSPACE, 127, 8):
+            if buf:
+                buf.pop()
+        elif 32 <= ch <= 126:
+            buf.append(chr(ch))
+        render()
+
+
+# ── Memory browser (full-screen curses) ───────────────────────────────────────
+
+def memory_browser(stdscr):
+    """
+    Full-screen memory editor.
+    ↑↓ navigate · e edit · d delete · a add · tab toggle section · q back
+    """
+    CP_HDR  = 2   # white on blue
+    CP_CUR  = 8   # cyan + reverse
+    CP_PIN  = 5   # green  — pinned facts
+    CP_LRN  = 9   # yellow — learned facts
+    CP_DIM  = 7   # dim
+    CP_ERR  = 6   # red
+
+    SECTION_LABELS = {"pinned": "PINNED  (/pin)", "learned": "LEARNED  (/learn · auto)"}
+
+    def _entries():
+        """Flat ordered list of (section, key, text, source_or_None)."""
+        out = []
+        for k, v in _memory.items():
+            out.append(("pinned", k, v, None))
+        for k, v in _learned.items():
+            fact = v["fact"] if isinstance(v, dict) else v
+            src  = v.get("source", "?") if isinstance(v, dict) else "?"
+            out.append(("learned", k, fact, src))
+        return out
+
+    cur = 0
+
+    def draw(entries):
+        nonlocal cur
+        h, w = stdscr.getmaxyx()
+        stdscr.erase()
+
+        hdr = ("  MEMORY BROWSER  ·  ↑↓ navigate  ·  e edit  ·  a add  "
+               "·  d delete  ·  q back")
+        try:
+            stdscr.addstr(0, 0, hdr[:w - 1],
+                          curses.color_pair(CP_HDR) | curses.A_BOLD)
+        except curses.error:
+            pass
+
+        list_h = h - 3
+        if not entries:
+            try:
+                stdscr.addstr(2, 2, "no memories stored yet  —  press a to add one",
+                              curses.color_pair(CP_DIM) | curses.A_DIM)
+            except curses.error:
+                pass
+        else:
+            last_section = None
+            row = 1
+            for i, (sec, key, text, src) in enumerate(entries):
+                if row >= list_h:
+                    break
+                # Section header
+                if sec != last_section:
+                    if last_section is not None:
+                        row += 1   # blank line between sections
+                    try:
+                        lbl = f"  ── {SECTION_LABELS[sec]} "
+                        lbl = lbl + "─" * max(0, w - len(lbl) - 1)
+                        stdscr.addstr(row, 0, lbl[:w - 1],
+                                      curses.color_pair(CP_DIM) | curses.A_DIM)
+                    except curses.error:
+                        pass
+                    row += 1
+                    last_section = sec
+
+                if row >= list_h:
+                    break
+
+                is_cur = (i == cur)
+                cp     = CP_PIN if sec == "pinned" else CP_LRN
+                tag    = f"({src}) " if src else ""
+                line   = f"  {'▶' if is_cur else ' '}  {tag}{text}"
+                if is_cur:
+                    attr = curses.color_pair(CP_CUR) | curses.A_BOLD | curses.A_REVERSE
+                else:
+                    attr = curses.color_pair(cp)
+                try:
+                    stdscr.addstr(row, 0, line[:w - 1], attr)
+                except curses.error:
+                    pass
+                row += 1
+
+        # Footer
+        try:
+            stdscr.addstr(h - 2, 0, "─" * (w - 1),
+                          curses.color_pair(CP_DIM) | curses.A_DIM)
+            n_pin = len(_memory)
+            n_lrn = len(_learned)
+            footer = f"  {n_pin} pinned  ·  {n_lrn} learned"
+            stdscr.addstr(h - 1, 0, footer[:w - 1],
+                          curses.color_pair(CP_DIM) | curses.A_DIM)
+        except curses.error:
+            pass
+
+        stdscr.noutrefresh()
+        curses.doupdate()
+
+    stdscr.keypad(True)
+    curses.curs_set(0)
+
+    while True:
+        entries = _entries()
+        if cur >= len(entries):
+            cur = max(0, len(entries) - 1)
+        draw(entries)
+
+        ch = stdscr.getch()
+        h, w = stdscr.getmaxyx()
+
+        if ch == curses.KEY_RESIZE:
+            continue
+
+        elif ch in (ord('q'), ord('Q'), 27):
+            curses.curs_set(1)
+            return
+
+        elif ch == curses.KEY_UP:
+            cur = max(0, cur - 1)
+
+        elif ch == curses.KEY_DOWN:
+            cur = min(max(0, len(entries) - 1), cur + 1)
+
+        elif ch in (curses.KEY_HOME, 1):
+            cur = 0
+
+        elif ch in (curses.KEY_END, 5):
+            cur = max(0, len(entries) - 1)
+
+        elif ch in (ord('d'), ord('D')) and entries:
+            sec, key, text, _ = entries[cur]
+            store = _memory if sec == "pinned" else _learned
+            q = f"  delete: '{text[:w - 20]}'?  [y/N]:  "
+            try:
+                stdscr.move(h - 1, 0)
+                stdscr.clrtoeol()
+                stdscr.addstr(h - 1, 0, q[:w - 1],
+                              curses.color_pair(CP_ERR) | curses.A_BOLD)
+                stdscr.noutrefresh()
+                curses.doupdate()
+            except curses.error:
+                pass
+            answer = _inline_input(stdscr, h - 1, len(q), w)
+            if answer.lower() == 'y':
+                del store[key]
+                _save_memory_file()
+                cur = max(0, cur - 1)
+            curses.curs_set(0)
+
+        elif ch in (ord('e'), ord('E')) and entries:
+            sec, key, text, _ = entries[cur]
+            store = _memory if sec == "pinned" else _learned
+            prompt = "  edit:  "
+            try:
+                stdscr.move(h - 1, 0)
+                stdscr.clrtoeol()
+                stdscr.addstr(h - 1, 0, prompt[:w - 1],
+                              curses.color_pair(CP_CUR) | curses.A_BOLD)
+                stdscr.noutrefresh()
+                curses.doupdate()
+            except curses.error:
+                pass
+            # Pre-fill with current text by inserting it into the inline input
+            new_text = _inline_input_prefill(stdscr, h - 1, len(prompt), w, text)
+            if new_text and new_text != text:
+                if sec == "pinned":
+                    store[key] = new_text.strip()
+                else:
+                    if isinstance(store[key], dict):
+                        store[key]["fact"] = new_text.strip()
+                    else:
+                        store[key] = new_text.strip()
+                _save_memory_file()
+            curses.curs_set(0)
+
+        elif ch in (ord('a'), ord('A')):
+            # Ask which section first if there's room, then get the text
+            section_ch = _ui.choose(("Pinned fact", "Learned fact"), default=0) if _ui else "Pinned fact"
+            sec = "learned" if section_ch and "Learned" in section_ch else "pinned"
+            prompt = f"  add to {sec}:  "
+            try:
+                stdscr.move(h - 1, 0)
+                stdscr.clrtoeol()
+                stdscr.addstr(h - 1, 0, prompt[:w - 1],
+                              curses.color_pair(CP_CUR) | curses.A_BOLD)
+                stdscr.noutrefresh()
+                curses.doupdate()
+            except curses.error:
+                pass
+            new_text = _inline_input(stdscr, h - 1, len(prompt), w)
+            if new_text and new_text.strip():
+                if sec == "pinned":
+                    _pin_fact(new_text.strip())
+                else:
+                    _learn_fact(new_text.strip(), source="manual")
+                cur = len(_entries()) - 1   # jump to newly added entry
+            curses.curs_set(0)
+
+
+# ── Session manager (full-screen curses) ──────────────────────────────────────
+
+def session_manager(stdscr):
+    """
+    Full-screen session browser.
+    Keys: ↑↓ navigate · space select · a select-all · enter load
+          r rename · d delete selected (or cursor) · q back
+    Returns (sess_name, messages) if a session was loaded, else (None, None).
+    """
+    def _load_sessions():
+        return sorted(
+            [(p.stem, p) for p in SESS_DIR.iterdir() if p.suffix == ".jsonl"],
+            key=lambda x: x[1].stat().st_mtime,
+            reverse=True,
+        )
+
+    sessions = _load_sessions()
+    selected = set()
+    cursor   = 0
+
+    CP_HDR  = 2   # reuse TUI.CP_STATUS pair
+    CP_SEL  = 5   # green for selected
+    CP_CUR  = 8   # cyan+reverse for cursor
+    CP_NORM = 1
+    CP_DIM  = 7
+    CP_ERR  = 6
+
+    def draw():
+        h, w = stdscr.getmaxyx()
+        stdscr.erase()
+
+        # ── header ──
+        hdr = ("  SESSION MANAGER  ·  ↑↓ nav  ·  space sel  "
+               "·  a all  ·  enter load  ·  r rename  ·  d delete  ·  q back")
+        try:
+            stdscr.addstr(0, 0, hdr[:w - 1],
+                          curses.color_pair(CP_HDR) | curses.A_BOLD)
+        except curses.error:
+            pass
+
+        list_h = h - 3
+        for i, (name, path) in enumerate(sessions):
+            if i >= list_h:
+                break
+            label, updated = _load_session_meta(path)
+            rel   = _relative_time(updated)
+            display = label if label else name[:36]
+            marker = "◆" if i in selected else "◇"
+            line   = f"  {marker}  {display:<38}  {rel:<12}"
+            is_cur = (i == cursor)
+
+            if is_cur:
+                attr = curses.color_pair(CP_CUR) | curses.A_BOLD | curses.A_REVERSE
+            elif i in selected:
+                attr = curses.color_pair(CP_SEL) | curses.A_BOLD
+            else:
+                attr = curses.color_pair(CP_NORM)
+
+            try:
+                stdscr.addstr(i + 1, 0, line[:w - 1], attr)
+            except curses.error:
+                pass
+
+        # ── footer ──
+        try:
+            stdscr.addstr(h - 2, 0, "─" * (w - 1),
+                          curses.color_pair(CP_DIM) | curses.A_DIM)
+            footer = (f"  {len(sessions)} sessions"
+                      + (f"  ·  {len(selected)} selected" if selected else ""))
+            stdscr.addstr(h - 1, 0, footer[:w - 1],
+                          curses.color_pair(CP_DIM) | curses.A_DIM)
+        except curses.error:
+            pass
+
+        if not sessions:
+            try:
+                stdscr.addstr(2, 2, "no saved sessions",
+                              curses.color_pair(CP_DIM) | curses.A_DIM)
+            except curses.error:
+                pass
+
+        stdscr.noutrefresh()
+        curses.doupdate()
+
+    stdscr.keypad(True)
+    curses.curs_set(0)
+    draw()
+
+    while True:
+        ch = stdscr.getch()
+        h, w = stdscr.getmaxyx()
+
+        if ch == curses.KEY_RESIZE:
+            draw()
+
+        elif ch in (ord('q'), ord('Q'), 27):
+            curses.curs_set(1)
+            return None, None
+
+        elif ch == curses.KEY_UP:
+            cursor = max(0, cursor - 1)
+            draw()
+
+        elif ch == curses.KEY_DOWN:
+            cursor = min(max(0, len(sessions) - 1), cursor + 1)
+            draw()
+
+        elif ch == ord(' '):
+            if cursor in selected:
+                selected.discard(cursor)
+            else:
+                selected.add(cursor)
+            cursor = min(cursor + 1, max(0, len(sessions) - 1))
+            draw()
+
+        elif ch in (ord('a'), ord('A')):
+            if len(selected) == len(sessions):
+                selected.clear()
+            else:
+                selected = set(range(len(sessions)))
+            draw()
+
+        elif ch in (curses.KEY_ENTER, ord('\n'), ord('\r')):
+            if not sessions:
+                continue
+            name, _ = sessions[cursor]
+            curses.curs_set(1)
+            n, msgs = load_session_messages(name)
+            return n, msgs
+
+        elif ch in (ord('r'), ord('R')):
+            if not sessions:
+                continue
+            name, path = sessions[cursor]
+            prompt_text = f"  rename  '{name}'  →  "
+            try:
+                stdscr.move(h - 1, 0)
+                stdscr.clrtoeol()
+                stdscr.addstr(h - 1, 0, prompt_text[:w - 1],
+                              curses.color_pair(CP_CUR) | curses.A_BOLD)
+                stdscr.noutrefresh()
+                curses.doupdate()
+            except curses.error:
+                pass
+            new_name = _inline_input(stdscr, h - 1, len(prompt_text), w)
+            if new_name and new_name != name:
+                new_path = SESS_DIR / f"{new_name}.jsonl"
+                try:
+                    path.rename(new_path)
+                    sessions[cursor] = (new_name, new_path)
+                except Exception as e:
+                    try:
+                        stdscr.addstr(h - 1, 0, f"  rename failed: {e}"[:w - 1],
+                                      curses.color_pair(CP_ERR))
+                        stdscr.noutrefresh(); curses.doupdate()
+                        time.sleep(1.5)
+                    except curses.error:
+                        pass
+            curses.curs_set(0)
+            draw()
+
+        elif ch in (ord('d'), ord('D')):
+            if not sessions:
+                continue
+            to_delete = sorted(selected if selected else {cursor}, reverse=True)
+            names     = [sessions[i][0] for i in to_delete if i < len(sessions)]
+            if len(names) == 1:
+                q = f"  delete  '{names[0]}'?  [y/N]:  "
+            else:
+                q = f"  delete {len(names)} sessions?  [y/N]:  "
+            try:
+                stdscr.move(h - 1, 0)
+                stdscr.clrtoeol()
+                stdscr.addstr(h - 1, 0, q[:w - 1],
+                              curses.color_pair(CP_ERR) | curses.A_BOLD)
+                stdscr.noutrefresh()
+                curses.doupdate()
+            except curses.error:
+                pass
+            answer = _inline_input(stdscr, h - 1, len(q), w)
+            if answer.lower() == 'y':
+                for i in sorted(to_delete, reverse=True):
+                    if i < len(sessions):
+                        try:
+                            sessions[i][1].unlink()
+                        except Exception:
+                            pass
+                        sessions.pop(i)
+                selected.clear()
+                cursor = min(cursor, max(0, len(sessions) - 1))
+            curses.curs_set(0)
+            draw()
+
+
+# ── Query complexity + auto model selection ────────────────────────────────────
+
+_COMPLEX_RE = re.compile(
+    r'\b(write|create|generate|implement|build|develop|script|function|class|'
+    r'fix|debug|refactor|optimize|edit|modify|update|'
+    r'analyze|analyse|compare|design|architect|'
+    r'why does|how does|what causes|walk me through|step.by.step)\b',
+    re.IGNORECASE
+)
+
+def _classify(text, has_file=False):
+    """Return 'fast' or 'full' based on query complexity."""
+    if has_file:               return "full"
+    if len(text.split()) > 60: return "full"
+    if _COMPLEX_RE.search(text): return "full"
+    return "fast"
+
+_model_cache      = None   # cached result of _light_model()
+_model_cache_ts   = 0.0
+_use_serper       = False  # DDG by default; toggled by /serper
+_deep_think       = False  # prepend [DEEP THINK] to queries when ON
+_cal_events       = []     # cached calendar event lines (background-fetched)
+_cal_ts           = 0.0    # timestamp of last successful calendar fetch
+_memory           = {}     # persistent facts from /pin
+_learned          = {}     # auto-learned corrections and /learn facts
+_mood             = "default"   # personality mood
+_last_query       = ""     # last user message (for /retry)
+_watched_files    = {}     # {path_str: mtime} for /watch
+
+# Self-awareness state — updated by _tui_main so _sys_ctx() can report them
+_platy_model      = DEFAULT_MODEL   # currently active model name
+_platy_session    = ""              # current session name
+
+MEMORY_FILE = Path.home() / ".platy_memory.json"
+
+MOODS = {
+    "default":  "",
+    "focused":  "Be professional and terse. Prioritize clarity and brevity above all.",
+    "playful":  "Be extra witty and fun. Lean into banter and light humor throughout.",
+    "direct":   "Be blunt and minimal. No fluff. Bullet points are acceptable in this mode.",
+}
+
+_REASONING_MODEL_TAGS = ("deepseek-r1", "deepseek-r2", "deepseek-coder")
+# Reasoning-specialist models (chain-of-thought focused) should not be used as
+# the fast chat model — they tend to ignore format instructions and produce
+# structured lists regardless of system-prompt guidance.
+
+def _light_model():
+    """Return the fastest local (ollama) model, with a 60-second cache.
+    Prefers small general-chat models; avoids reasoning specialists.
+    Never auto-selects Claude — that requires explicit /model selection."""
+    global _model_cache, _model_cache_ts
+    if _model_cache and time.time() - _model_cache_ts < 60:
+        return _model_cache
+    # Only consider local models (no claude- prefix)
+    names = [n for n, _ in get_models() if not n.startswith("claude-")]
+    if not names:
+        _model_cache = DEFAULT_MODEL
+    else:
+        _LIGHT_TAGS = ("1b", "3b", "phi", "tiny", "mini", "small", "7b", "8b")
+        # Pass 1: small general-chat model (not a reasoning specialist)
+        for n in names:
+            nl = n.lower()
+            if (any(x in nl for x in _LIGHT_TAGS) and
+                    not any(r in nl for r in _REASONING_MODEL_TAGS)):
+                _model_cache = n
+                break
+        else:
+            # Pass 2: any small model including reasoning ones
+            for n in names:
+                if any(x in n.lower() for x in _LIGHT_TAGS):
+                    _model_cache = n
+                    break
+            else:
+                _model_cache = names[0]
+    _model_cache_ts = time.time()
+    return _model_cache
+
+_SMALL_MODEL_TAGS = ("1b", "3b", "7b", "8b", "phi", "tiny", "mini", "small")
+
+def _is_small_model(name):
+    """True for lightweight models that benefit from a shorter system prompt."""
+    n = name.lower()
+    return any(t in n for t in _SMALL_MODEL_TAGS)
+
+def _prompt_for(model_name):
+    """Return the most appropriate system prompt for this model's capability."""
+    if model_name.startswith("claude-") or not _is_small_model(model_name):
+        return SYSTEM_PROMPT
+    return SHORT_SYSTEM_PROMPT
+
+_UPGRADE_RE = re.compile(r'UPGRADE_NEEDED\s*\nreason:\s*(.+)', re.IGNORECASE)
+
+def _next_capable_model(current):
+    """Return the best available LOCAL model more capable than current. Never Claude."""
+    all_models = [n for n, _ in get_models()]
+    # Local non-small models first, excluding current
+    capable = [n for n in all_models
+               if not _is_small_model(n) and not n.startswith("claude-") and n != current]
+    if capable:
+        return capable[0]
+    # Any local model that isn't current (still better than nothing)
+    others = [n for n in all_models if not n.startswith("claude-") and n != current]
+    if others:
+        return others[0]
+    # No local upgrade available — caller must handle Claude separately with confirmation
+    return None
+
+def _claude_upgrade_model():
+    """Return the best Claude model available, or None."""
+    for n, _ in get_models():
+        if n.startswith("claude-sonnet"):
+            return n
+    for n, _ in get_models():
+        if n.startswith("claude-"):
+            return n
+    return None
+
+
+# ── Agent delegation ───────────────────────────────────────────────────────────
+
+_DELEGATE_RE = re.compile(
+    r'^DELEGATE_START\s*\ntask:\s*(.+?)\nDELEGATE_END',
+    re.MULTILINE | re.DOTALL
+)
+
+def _run_delegate(task):
+    """
+    Run a silent, isolated sub-agent call on the fast model.
+    Not displayed, not saved to session. Returns result string.
+    """
+    msgs = [
+        {"role": "system",
+         "content": ("You are a focused sub-agent. Answer the task concisely and precisely. "
+                     "Plain text only, no markdown.")},
+        {"role": "user", "content": task},
+    ]
+    _, result = ask(msgs, _light_model(), silent=True)
+    return result.strip() or "(no result)"
+
+
+def _run_parallel_delegates(tasks):
+    """Run delegate tasks concurrently. Returns list of (task, result) tuples."""
+    if len(tasks) == 1:
+        return [(tasks[0], _run_delegate(tasks[0]))]
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(len(tasks), 4)) as pool:
+        futures = {pool.submit(_run_delegate, t): t for t in tasks}
+        for future in as_completed(futures):
+            t = futures[future]
+            try:
+                results[t] = future.result()
+            except Exception as e:
+                results[t] = f"(error: {e})"
+    return [(t, results[t]) for t in tasks]
+
+
+# ── Shell agent ────────────────────────────────────────────────────────────────
+
+_SHELL_RE = re.compile(
+    r'^SHELL_START\s*\ncmd:\s*(.+?)\nSHELL_END',
+    re.MULTILINE | re.DOTALL
+)
+
+def _run_shell_agent(cmd, timeout=30):
+    """Execute a shell command after user approval. Returns output string."""
+    print_info(f"  shell agent ▸  {cmd[:80]}")
+    if _ui:
+        answer = _ui.choose(("Run", "Skip"), default=1)
+    else:
+        try:
+            raw = input("  run this command? [y/N]: ").strip().lower()
+            answer = "Run" if raw == "y" else "Skip"
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return "(cancelled)"
+    if answer != "Run":
+        return "(user skipped)"
+    try:
+        proc = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True,
+            timeout=timeout, cwd=str(Path.home())
+        )
+        out = (proc.stdout + proc.stderr).strip()
+        if len(out) > 2000:
+            out = out[:2000] + "\n…(truncated)"
+        return out or "(no output)"
+    except subprocess.TimeoutExpired:
+        return f"(timeout after {timeout}s)"
+    except Exception as e:
+        return f"(error: {e})"
+
+
+# ── Specialized / iterative agents ────────────────────────────────────────────
+
+_AGENT_RE = re.compile(
+    r'^AGENT_START\s*\nrole:\s*(\w+)\s*\ntask:\s*(.+?)\nAGENT_END',
+    re.MULTILINE | re.DOTALL
+)
+
+_AGENT_TOOL_RE = re.compile(
+    r'^TOOL_CALL\s*\ntype:\s*(\w+)\s*\ninput:\s*(.+?)\nTOOL_END',
+    re.MULTILINE | re.DOTALL
+)
+
+_FINAL_ANSWER_RE = re.compile(
+    r'^FINAL_ANSWER:\s*(.+)',
+    re.MULTILINE | re.DOTALL
+)
+
+_AGENT_ROLE_PROMPTS = {
+    "researcher": (
+        "You are a research agent. Answer a specific task using tools when needed.\n\n"
+        "TOOLS:\n"
+        "  TOOL_CALL\n  type: web_search\n  input: your search query\n  TOOL_END\n\n"
+        "  TOOL_CALL\n  type: delegate\n  input: a specific question for another LLM\n  TOOL_END\n\n"
+        "When done:\n  FINAL_ANSWER: your complete answer\n\n"
+        "Rules: plain text only. Use tools for current or external info. Think step by step."
+    ),
+    "coder": (
+        "You are a coding agent. Write, fix, or explain code as requested.\n\n"
+        "TOOLS:\n"
+        "  TOOL_CALL\n  type: delegate\n  input: a syntax or API question\n  TOOL_END\n\n"
+        "When done:\n  FINAL_ANSWER: your code or explanation\n\n"
+        "Rules: for complete scripts use SCRIPT_START/SCRIPT_END. Think before coding."
+    ),
+    "executor": (
+        "You are an executor agent. Complete a task by running shell commands.\n\n"
+        "TOOLS:\n"
+        "  TOOL_CALL\n  type: shell\n  input: the shell command\n  TOOL_END\n\n"
+        "When done:\n  FINAL_ANSWER: summary of what was done and the results\n\n"
+        "Rules: one command per TOOL_CALL. The user approves each command. Plan before acting."
+    ),
+    "analyst": (
+        "You are an analyst agent. Reason through a problem and produce a clear conclusion.\n"
+        "No external tools — use only your knowledge and reasoning.\n\n"
+        "When done:\n  FINAL_ANSWER: your analysis and conclusion\n\n"
+        "Rules: think step by step, consider multiple angles, give a clear verdict."
+    ),
+}
+
+
+def _run_iterative_agent(role, task, model, max_steps=5):
+    """Run an autonomous multi-step agent loop. Returns the final answer string."""
+    sys_p = _AGENT_ROLE_PROMPTS.get(role, _AGENT_ROLE_PROMPTS["analyst"])
+    msgs  = [
+        {"role": "system", "content": sys_p},
+        {"role": "user",   "content": task},
+    ]
+    resp = ""
+    for _ in range(max_steps):
+        _, resp = ask(msgs, model, silent=True)
+
+        fa = _FINAL_ANSWER_RE.search(resp)
+        if fa:
+            return fa.group(1).strip()
+
+        tm = _AGENT_TOOL_RE.search(resp)
+        if not tm:
+            return resp.strip()
+
+        tool_type  = tm.group(1).strip().lower()
+        tool_input = tm.group(2).strip()
+        msgs.append({"role": "assistant", "content": resp})
+
+        if tool_type == "web_search":
+            result_str, _ = web_search(tool_input)
+            tool_result   = result_str or "(no results)"
+        elif tool_type == "shell":
+            tool_result = _run_shell_agent(tool_input)
+        elif tool_type == "delegate":
+            tool_result = _run_delegate(tool_input)
+        else:
+            tool_result = f"(unknown tool: {tool_type})"
+
+        msgs.append({
+            "role": "user",
+            "content": f"[TOOL RESULT: {tool_type}]: {tool_result}\n\nContinue.",
+        })
+
+    return resp.strip() if resp else "(agent reached step limit)"
+
+
+# ── Output helpers (TUI-aware) ─────────────────────────────────────────────────
+
+def _is_ssh():
+    return bool(os.getenv("SSH_CLIENT") or os.getenv("SSH_TTY")
+                or os.getenv("SSH_CONNECTION"))
+
+def _copy_to_clipboard(text):
+    """
+    Copy text to the user's clipboard.
+    - Local session → pbcopy (macOS native)
+    - SSH session   → returns False so the caller can suspend curses and
+                      print the response as selectable plain text instead.
+    Returns (success: bool, method: str).
+    """
+    if not _is_ssh():
+        try:
+            proc = subprocess.run(["pbcopy"], input=text.encode(), timeout=3)
+            return proc.returncode == 0, "pbcopy"
+        except Exception:
+            return False, ""
+    return False, "ssh"
+
+
+def print_user(text):
+    if _ui:
+        _ui.add("")
+        pr = getattr(_ui, '_last_paste_range', None)
+        if pr is not None:
+            ps, pe       = pr
+            pre          = text[:ps]
+            pasted       = text[ps:pe]
+            post         = text[pe:]
+            n_words      = len(pasted.split())
+            n_lines      = pasted.count("\n") + 1
+            label        = f"[Pasted text · {n_words} words · {n_lines} lines]"
+            display      = pre + label + post
+            preview      = (display[:72] + "…") if len(display) > 72 else display
+            _ui.add(f"you  ▸  {preview}", TUI.CP_USER, bold=True)
+        elif "\n" in text:
+            n_lines = text.count("\n") + 1
+            n_words = len(text.split())
+            _ui.add(f"you  ▸  [Pasted text · {n_words} words · {n_lines} lines]", TUI.CP_USER, bold=True)
+        else:
+            preview = (text[:72] + "…") if len(text) > 72 else text
+            _ui.add(f"you  ▸  {preview}", TUI.CP_USER, bold=True)
+        _ui.add("")
+    else:
+        display = text.replace("\n", " ")
+        preview = (display[:80] + "…") if len(display) > 80 else display
+        print(f"\n{ORANGE}{BOLD}you{R} {DGRAY}▸{R}  {preview}\n")
+
+def print_info(msg):
+    if _ui:
+        _ui.add(f"  {msg}", TUI.CP_INFO)
+    else:
+        print(f"  {DGRAY}{msg}{R}")
+
+def print_ok(msg):
+    if _ui:
+        _ui.add(f"  ✓  {msg}", TUI.CP_OK)
+    else:
+        print(f"  {GREEN}✓{R}  {msg}")
+
+def print_err(msg):
+    if _ui:
+        _ui.add(f"  ✗  {msg}", TUI.CP_ERR)
+    else:
+        print(f"\n  {RED}✗{R}  {msg}\n", file=sys.stderr)
+
+def rule():
+    if _ui:
+        _ui.add("─" * min(60, max(10, _ui._w - 4)), TUI.CP_INFO)
+    else:
+        try:    w = os.get_terminal_size().columns
+        except: w = 80
+        print(f"{DGRAY}{'─' * w}{R}")
+
+def show_sources(sources):
+    """Store sources from last web search silently — use /sources to display them."""
+    global _last_sources
+    _last_sources = list(sources) if sources else []
+
+def display_sources():
+    """Display the sources from the last web search (called by /sources command)."""
+    if not _last_sources:
+        print_info("no sources from the last search")
+        return
+    if _ui:
+        _ui.add("")
+        _ui.add("  sources:", TUI.CP_CYAN, bold=True)
+        for i, (title, url) in enumerate(_last_sources, 1):
+            _ui.add(f"  [{i}] {title}", TUI.CP_INFO)
+            short_url = url if len(url) <= 90 else url[:87] + "…"
+            _ui.add(f"       {short_url}", TUI.CP_CYAN)
+        _ui.add("")
+    else:
+        print(f"\n  {CYAN}sources:{R}")
+        for i, (title, url) in enumerate(_last_sources, 1):
+            print(f"  {i}.  {title}")
+            print(f"       {CYAN}{url}{R}")
+        print()
+
+
+# ── Diff colorization ─────────────────────────────────────────────────────────
+
+def _diff_style(text):
+    """
+    Detect unified-diff line prefixes and return (tui_cp, ansi_code).
+    + line  → green addition
+    - line  → red deletion
+    @@ ...  → cyan hunk header
+    anything else → normal AI color
+    """
+    if re.match(r'^\+(?!\+\+)', text):  return TUI.CP_OK,   GREEN
+    # Diff deletion: '-' immediately followed by non-space/non-dash content.
+    # Markdown bullets ("- item") start with "- " and must NOT be colored red.
+    if re.match(r'^-(?![-\s])', text):  return TUI.CP_ERR,  RED
+    if text.startswith('@@'):           return TUI.CP_CYAN, CYAN
+    return TUI.CP_AI, ""
+
+_CONF_TAG_RE = re.compile(r'^\[(C|U|K)\]\s*')
+
+def _strip_confidence_tag(text):
+    """Strip a leading [C]/[U]/[K] confidence tag from a line.
+    Returns (tui_cp_or_None, ansi_or_None, text_with_tag_removed).
+    [C] → green  (confident, fact-checked)
+    [U] → yellow (uncertain, user should verify)
+    [K] → red    (suspected Platypus Fallacy / likely wrong)
+    """
+    m = _CONF_TAG_RE.match(text)
+    if not m:
+        return None, None, text
+    tag      = m.group(1)
+    stripped = text[m.end():]
+    if tag == 'C':
+        return TUI.CP_OK,   GREEN,  stripped
+    if tag == 'U':
+        return TUI.CP_WARN, YELLOW, stripped
+    return TUI.CP_ERR, RED, stripped
+
+
+# ── System context ────────────────────────────────────────────────────────────
+
+def _read_calendar_fs():
+    """Read upcoming events from macOS Calendar SQLite DB (no permissions required)."""
+    db = (Path.home() / "Library" / "Group Containers" /
+          "group.com.apple.calendar" / "Calendar.sqlitedb")
+    if not db.exists():
+        return []
+    # CoreData epoch: seconds since 2001-01-01 UTC
+    EPOCH  = datetime(2001, 1, 1, tzinfo=timezone.utc)
+    now    = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=2)
+    now_cd    = (now    - EPOCH).total_seconds()
+    cutoff_cd = (cutoff - EPOCH).total_seconds()
+    events = []
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+        cur = con.cursor()
+        cur.execute(
+            "SELECT summary, start_date, all_day FROM CalendarItem "
+            "WHERE start_date >= ? AND start_date < ? ORDER BY start_date LIMIT 20",
+            (now_cd, cutoff_cd),
+        )
+        for summary, start_cd, all_day in cur.fetchall():
+            if not summary:
+                continue
+            dt    = (EPOCH + timedelta(seconds=start_cd)).astimezone()
+            label = "all day" if all_day else dt.strftime("%-I:%M %p")
+            events.append(f"{summary.strip()} @ {dt.strftime('%a %b %-d')} {label}".strip())
+        con.close()
+    except Exception:
+        pass
+    return events
+
+def _refresh_calendar():
+    """Fetch upcoming calendar events from local SQLite DB; no permissions required."""
+    global _cal_events, _cal_ts
+    try:
+        lines = _read_calendar_fs()
+        if lines:
+            _cal_events = lines
+            _cal_ts     = time.time()
+    except Exception:
+        pass
+
+def _ensure_calendar(force=False):
+    """Refresh calendar cache in background. Never blocks startup."""
+    if force or time.time() - _cal_ts > 300:
+        threading.Thread(target=_refresh_calendar, daemon=True).start()
+
+def _sys_ctx():
+    """
+    Build the live system-context string injected at the top of every ask().
+    Covers: platy identity, current date/time, host info, calendar, memory, mood.
+    """
+    now = datetime.now().astimezone()
+    mac_ver = platform.mac_ver()[0]
+    os_str  = f"macOS {mac_ver}" if mac_ver else platform.system()
+
+    lines = [
+        "SYSTEM CONTEXT (live, injected automatically — do not ask the user to provide this):",
+        # ── App identity (self-awareness) ───────────────────────────────────────
+        f"  app       : PLATY — local AI terminal console",
+        f"  ai model  : {_platy_model}",
+        f"  features  : web search · Apple docs"
+        + (f" · {DOCS_NAME} docs" if DOCS_NAME else "")
+        + " · memory · scripting · sessions",
+    ]
+    if _deep_think:
+        lines.append("  deep think: ACTIVE — maximum reasoning mode is ON")
+    if _mood != "default" and MOODS.get(_mood):
+        lines.append(f"  mood      : {MOODS[_mood]}")
+    if _platy_session:
+        lines.append(f"  session   : {_platy_session}")
+
+    # ── Live environment ────────────────────────────────────────────────────────
+    lines += [
+        f"  date/time : {now.strftime('%A, %B %-d %Y  %-I:%M %p')} {now.strftime('%Z')}",
+        f"  hostname  : {socket.gethostname()}",
+        f"  user      : {os.getenv('USER', os.getenv('LOGNAME', 'unknown'))}",
+        f"  os        : {os_str}",
+    ]
+
+    # ── Calendar events ─────────────────────────────────────────────────────────
+    if _cal_events:
+        lines.append("  calendar  : upcoming events:")
+        for ev in _cal_events:
+            lines.append(f"              {ev}")
+
+    # ── Persistent memory ───────────────────────────────────────────────────────
+    if _memory:
+        lines.append("  memory    : things the user has told you:")
+        for fact in list(_memory.values())[:10]:
+            lines.append(f"              {fact}")
+    if _learned:
+        lines.append("  learned   : corrections and facts from experience:")
+        for v in list(_learned.values())[:15]:
+            fact = v["fact"] if isinstance(v, dict) else v
+            lines.append(f"              {fact}")
+
+    return "\n".join(lines)
+
+
+# ── AI streaming ──────────────────────────────────────────────────────────────
+
+def ask(messages, model, silent=False, strip_phantom_cites=False):
+    """Stream a completion from ollama or Claude. Returns (raw_text, cleaned_text).
+    silent=True suppresses all output and the spinner (used for delegate calls).
+    strip_phantom_cites=True removes inline [N] citation markers and hallucinated
+    citation language when no web search was performed for this turn."""
+    # Keep self-awareness current so _sys_ctx() reports the right model name.
+    # Skip on silent delegate calls — those run on a sub-model, not the main one.
+    if not silent:
+        global _platy_model
+        _platy_model = model
+
+    # Select the right system prompt for this model's capability, then inject live context
+    if messages and messages[0].get("role") == "system":
+        base_prompt = _prompt_for(model)
+        ctx = (
+            _sys_ctx() +
+            "\nIMPORTANT: The SYSTEM CONTEXT above is live and accurate. "
+            "Use it to answer questions about the current time, date, or calendar events "
+            "instead of guessing or asking the user to check elsewhere.\n"
+        )
+        messages = [{"role": "system", "content": ctx + "\n" + base_prompt}] + messages[1:]
+
+    buf           = []
+    raw_parts     = []
+    cleaned_lines = []
+    in_think      = False
+
+    # ── spinner (skipped when silent) ─────────────────────────────────────────
+    _stop_spinner    = threading.Event()
+    _spinner_cleared = silent   # pre-cleared when silent so _clear_spinner is a no-op
+
+    if not silent:
+        def _spinner_fn():
+            t0 = time.time(); i = 0
+            while not _stop_spinner.is_set():
+                elapsed = int(time.time() - t0)
+                dot  = "●" if (i // 4) % 2 == 0 else " "
+                note = "  working hard…" if elapsed >= 30 else ""
+                if _ui:
+                    _ui.spin_update(f"{dot}  thinking  {elapsed}s{note}")
+                else:
+                    color = RED if elapsed >= 30 else ORANGE
+                    dot_c = f"{color}{dot}{R}" if dot == "●" else dot
+                    print(f"\r  {dot_c}  {DGRAY}thinking  {elapsed}s{note}{R}   ",
+                          end="", flush=True)
+                i += 1
+                _stop_spinner.wait(0.12)
+            if _ui:
+                _ui.spin_stop()
+            else:
+                print(f"\r{' ' * 60}\r", end="", flush=True)
+
+        _spin = threading.Thread(target=_spinner_fn, daemon=True)
+        _spin.start()
+    else:
+        _spin = None
+
+    def _clear_spinner():
+        nonlocal _spinner_cleared
+        if not _spinner_cleared:
+            _spinner_cleared = True
+            _stop_spinner.set()
+            _spin.join()
+
+    # ── line processor ─────────────────────────────────────────────────────────
+
+    def flush_line(line):
+        nonlocal in_think
+        if "<think>"  in line: in_think = True;  return None
+        if "</think>" in line: in_think = False; return None
+        if in_think:           return None
+        # Strip confidence tag before any other processing so it never
+        # reaches session storage or phantom-cite stripping.
+        conf_cp, conf_ansi, line = _strip_confidence_tag(line)
+        cleaned = strip_line(line)
+        if strip_phantom_cites and cleaned:
+            cleaned = _PHANTOM_CITE_RE.sub('', cleaned)
+            cleaned = _PHANTOM_LANG_RE.sub('', cleaned).strip()
+            line = cleaned   # keep display consistent with what gets stored
+        if cleaned is not None and not silent:
+            if conf_cp is not None:
+                cp, ansi = conf_cp, conf_ansi
+            else:
+                cp, ansi = _diff_style(cleaned)
+            if _ui:
+                # Send the tag-stripped line so the TUI renders clean text
+                # with the correct confidence colour applied.
+                _ui.add(line, cp)
+            else:
+                print(f"{ansi}{cleaned}{R}" if ansi else f"  {cleaned}")
+        return cleaned
+
+    def _ingest(token):
+        nonlocal buf
+        if token:
+            _clear_spinner()
+        raw_parts.append(token)
+        for ch in token:
+            if ch == "\n":
+                line = "".join(buf); buf = []
+                result = flush_line(line)
+                if result is not None:
+                    cleaned_lines.append(result)
+            else:
+                buf.append(ch)
+
+    def _flush_buf():
+        if buf:
+            result = flush_line("".join(buf))
+            if result is not None:
+                cleaned_lines.append(result)
+
+    # ── API calls ──────────────────────────────────────────────────────────────
+
+    try:
+        if model.startswith("claude-"):
+            if not ANTHROPIC_KEY:
+                print_err("ANTHROPIC_API_KEY is not set — add it to ~/.zshrc")
+                _clear_spinner()
+                return "", ""
+            system   = next((m["content"] for m in messages if m["role"] == "system"), "")
+            api_msgs = [m for m in messages if m["role"] != "system"]
+            body = json.dumps({
+                "model": model, "max_tokens": 8192, "system": system,
+                "messages": api_msgs, "stream": True,
+            }).encode()
+            req = Request(
+                "https://api.anthropic.com/v1/messages", data=body,
+                headers={"x-api-key": ANTHROPIC_KEY,
+                         "anthropic-version": "2023-06-01",
+                         "content-type": "application/json"},
+            )
+            with urlopen(req, timeout=180) as resp:
+                for raw_line in resp:
+                    line = raw_line.decode().strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+                    if chunk.get("type") == "content_block_delta":
+                        delta = chunk.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            _ingest(delta.get("text", ""))
+                    elif chunk.get("type") == "message_stop":
+                        break
+            _flush_buf()
+
+        else:
+            body = json.dumps({
+                "model": model, "messages": messages, "stream": True,
+            }).encode()
+            req = Request(f"{API_BASE}/api/chat", data=body,
+                          headers={"Content-Type": "application/json"})
+            with urlopen(req, timeout=180) as resp:
+                for raw in resp:
+                    chunk = json.loads(raw.decode())
+                    _ingest(chunk.get("message", {}).get("content", ""))
+                    if chunk.get("done"):
+                        _flush_buf()
+                        break
+
+        _clear_spinner()
+        if not _ui and not silent:
+            print(R, end="", flush=True)
+
+    except HTTPError as e:
+        _clear_spinner()
+        if not silent:
+            try:
+                msg = json.loads(e.read().decode()).get("error", {}).get("message", str(e))
+            except Exception:
+                msg = str(e)
+            print_err(f"API error: {msg}")
+        return "", ""
+
+    except URLError as e:
+        _clear_spinner()
+        if not silent:
+            target = "Claude API" if model.startswith("claude-") else "ollama — is it running?"
+            print_err(f"Cannot reach {target}  ({e})")
+        return "", ""
+
+    except KeyboardInterrupt:
+        _clear_spinner()
+        if not _ui and not silent:
+            print(f"{R}")
+
+    raw_text     = "".join(raw_parts)
+    cleaned_text = re.sub(r"<think>.*?</think>", "", "\n".join(cleaned_lines),
+                          flags=re.DOTALL).strip()
+    # Strip non-Latin script characters (CJK, Arabic, etc.) that leak from model reasoning
+    cleaned_text = re.sub(r"[\u0600-\u06FF\u0750-\u077F"   # Arabic
+                          r"\u3000-\u9FFF"                  # CJK / Japanese / Korean
+                          r"\uAC00-\uD7AF"                  # Hangul
+                          r"\uF900-\uFAFF]+", "", cleaned_text)
+    cleaned_text = re.sub(r"[ \t]+\n", "\n", cleaned_text).strip()
+
+    # Store for Ctrl+B clipboard copy (non-silent calls only).
+    # Clear _last_sources here so stale sources from a previous search don't
+    # attach to a response that had no web search.  show_sources() will
+    # re-populate it if this turn actually had sources.
+    if not silent and cleaned_text:
+        global _last_ai_response, _last_sources
+        _last_ai_response = cleaned_text
+        _last_sources     = []
+
+    return raw_text, cleaned_text
+
+
+# ── Model picker ───────────────────────────────────────────────────────────────
+
+def _pick_model_curses(stdscr, models, current):
+    """
+    Full-screen interactive model picker.
+    ↑↓ navigate · Enter select · q/Esc cancel.
+    Returns chosen model name, or current if cancelled.
+    """
+    CP_HDR  = 2   # reuse TUI.CP_STATUS pair (white on blue)
+    CP_CUR  = 8   # TUI.CP_CYAN + reverse for cursor row
+    CP_NORM = 1   # TUI.CP_NORMAL
+    CP_DIM  = 7   # TUI.CP_INFO
+    CP_SEL  = 5   # TUI.CP_OK  (green) for current model
+    CP_WARN = 9   # TUI.CP_WARN (yellow) for Claude API models
+
+    # Start cursor on the currently active model
+    try:
+        cur = next(i for i, (n, _) in enumerate(models) if n == current)
+    except StopIteration:
+        cur = 0
+
+    def draw():
+        h, w = stdscr.getmaxyx()
+        stdscr.erase()
+        hdr = ("  MODEL SELECTOR  ·  ↑↓ navigate  ·  Enter select  ·  q back")
+        try:
+            stdscr.addstr(0, 0, hdr[:w - 1],
+                          curses.color_pair(CP_HDR) | curses.A_BOLD)
+        except curses.error:
+            pass
+
+        list_h = h - 3
+        for i, (name, size) in enumerate(models):
+            if i >= list_h:
+                break
+            is_cur     = (i == cur)
+            is_current = (name == current)
+            is_claude  = name.startswith("claude-")
+
+            marker = "▶" if is_cur else " "
+            tag    = "  (current)" if is_current else \
+                     "  (default)" if name == DEFAULT_MODEL else ""
+            line   = f"  {marker}  {name:<36} {size}{tag}"
+
+            if is_cur:
+                attr = curses.color_pair(CP_CUR) | curses.A_BOLD | curses.A_REVERSE
+            elif is_current:
+                attr = curses.color_pair(CP_SEL) | curses.A_BOLD
+            elif is_claude:
+                attr = curses.color_pair(CP_WARN)
+            else:
+                attr = curses.color_pair(CP_NORM)
+
+            try:
+                stdscr.addstr(i + 1, 0, line[:w - 1], attr)
+            except curses.error:
+                pass
+
+        # Footer
+        try:
+            stdscr.addstr(h - 2, 0, "─" * (w - 1),
+                          curses.color_pair(CP_DIM) | curses.A_DIM)
+            note = ("  ⚠  Claude API models bill your Anthropic account"
+                    if any(n.startswith("claude-") for n, _ in models) else "")
+            stdscr.addstr(h - 1, 0, (f"  {len(models)} models available" + note)[:w - 1],
+                          curses.color_pair(CP_DIM) | curses.A_DIM)
+        except curses.error:
+            pass
+
+        stdscr.noutrefresh()
+        curses.doupdate()
+
+    stdscr.keypad(True)
+    curses.curs_set(0)
+    draw()
+
+    while True:
+        ch = stdscr.getch()
+        h, _ = stdscr.getmaxyx()
+        list_h = h - 3
+
+        if ch == curses.KEY_RESIZE:
+            draw()
+
+        elif ch in (ord('q'), ord('Q'), 27):
+            curses.curs_set(1)
+            return current
+
+        elif ch == curses.KEY_UP:
+            cur = max(0, cur - 1)
+            draw()
+
+        elif ch == curses.KEY_DOWN:
+            cur = min(len(models) - 1, cur + 1)
+            draw()
+
+        elif ch in (curses.KEY_HOME, 1):
+            cur = 0
+            draw()
+
+        elif ch in (curses.KEY_END, 5):
+            cur = len(models) - 1
+            draw()
+
+        elif ch in (curses.KEY_ENTER, ord('\n'), ord('\r')):
+            curses.curs_set(1)
+            return models[cur][0]
+
+
+def pick_model(current="", stdscr=None):
+    models = get_models()
+    if not models:
+        return DEFAULT_MODEL
+
+    if stdscr is not None:
+        # Interactive curses picker
+        chosen = _pick_model_curses(stdscr, models, current)
+        if chosen == current:
+            return current or DEFAULT_MODEL
+    else:
+        # Fallback: plain-text numbered list (one-shot / non-TUI mode)
+        print_info("available models")
+        print_info("")
+        for i, (name, size) in enumerate(models, 1):
+            tag = "  ← current" if name == current else \
+                  "  ← default" if name == DEFAULT_MODEL and not current else ""
+            print_info(f"  [{i}]  {name:<34} {size}{tag}")
+        print_info("")
+        try:
+            raw = input(f"  select [1-{len(models)}] or enter to keep: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return current or DEFAULT_MODEL
+        if raw.isdigit() and 1 <= int(raw) <= len(models):
+            chosen = models[int(raw) - 1][0]
+        else:
+            return current or DEFAULT_MODEL
+
+    if chosen.startswith("claude-"):
+        print_info("")
+        print_info("⚠  Claude API selected — this model costs money per request.")
+        print_info(f"   Model:  {chosen}")
+        print_info("   Billed to your Anthropic account on every message.")
+        print_info("")
+        if _ui:
+            answer = _ui.choose(("Yes, use Claude API", "No, cancel"), default=1)
+        else:
+            try:
+                answer = "Yes, use Claude API" if input("  Approve? [y/N]: ").strip().lower() == "y" else "No"
+            except (EOFError, KeyboardInterrupt):
+                answer = "No"
+        if not answer.startswith("Yes"):
+            print_info("cancelled — keeping current model")
+            return current or DEFAULT_MODEL
+    return chosen
+
+
+# ── Drag-and-drop detection ────────────────────────────────────────────────────
+
+def detect_drop(text):
+    """
+    Detect a dragged file/folder path in user input.
+    Returns (Path, remainder) or (None, original_text).
+    """
+    t = text.strip()
+
+    m = re.match(r'^([\'"])(~?/.+?)\1(.*)$', t)
+    if m:
+        p = Path(m.group(2)).expanduser()
+        if p.exists():
+            return p, m.group(3).strip()
+
+    if t.startswith('/') or t.startswith('~/') or t.startswith('~'):
+        MARK  = "\x00"
+        unesc = t.replace('\\ ', MARK)
+        tokens = unesc.split(' ')
+        for i in range(len(tokens), 0, -1):
+            candidate = ' '.join(tokens[:i]).replace(MARK, ' ')
+            remainder = ' '.join(tokens[i:]).replace(MARK, ' ').strip()
+            p = Path(candidate).expanduser()
+            if p.exists():
+                return p, remainder
+
+    return None, text
+
+
+def dir_summary(path, max_items=60):
+    try:
+        all_items = sorted(path.iterdir(), key=lambda x: (x.is_file(), x.name.lower()))
+    except PermissionError:
+        return f"Directory: {path}\n(permission denied)"
+    lines = [f"Directory: {path}", f"{len(all_items)} items\n"]
+    for item in all_items[:max_items]:
+        if item.is_file():
+            try:    sz = f"{item.stat().st_size:,} bytes"
+            except: sz = ""
+            lines.append(f"  {item.name:<40} {sz}")
+        else:
+            lines.append(f"  {item.name}/")
+    if len(all_items) > max_items:
+        lines.append(f"  ... and {len(all_items) - max_items} more items")
+    return "\n".join(lines)
+
+
+# ── File operations ───────────────────────────────────────────────────────────
+
+def read_file(path_str):
+    path = Path(path_str).expanduser().resolve()
+    if not path.exists():
+        print_err(f"file not found: {path}"); return None
+    if not path.is_file():
+        print_err(f"not a regular file: {path}"); return None
+    try:
+        content = path.read_text(errors="replace")
+        print_ok(f"read {path}  ({len(content):,} chars)")
+        return str(path), content
+    except PermissionError:
+        print_err(f"permission denied: {path}"); return None
+
+def write_file(path_str, content):
+    path = Path(path_str).expanduser().resolve()
+    print_info(f"write {len(content):,} chars to:  {path}")
+    if _ui:
+        answer = _ui.choose(("Yes", "No", "Add context"), default=1)
+    else:
+        try:
+            answer = "Yes" if input("  confirm? [y/N]: ").strip().lower() == "y" else "No"
+        except (EOFError, KeyboardInterrupt):
+            print(); return False
+    if answer == "No":
+        print_info("cancelled"); return False
+    if answer not in ("Yes", "No"):   # "Add context" returned typed text
+        print_info(f"context noted: {answer}")
+        content = f"# context: {answer}\n{content}"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        print_ok(f"written → {path}")
+        return True
+    except PermissionError:
+        print_err(f"permission denied: {path}"); return False
+    except Exception as e:
+        print_err(str(e)); return False
+
+
+# ── Script extraction & validation ────────────────────────────────────────────
+
+SHELLCHECK       = str(Path.home() / "bin" / "shellcheck")
+MAX_FIX_ATTEMPTS = 3
+
+def extract_script(response):
+    """Pull script from AI response. Returns (script, type, filename) or (None,None,None)."""
+    m = re.search(r"^SCRIPT_START\s*\n(.*?)\n^SCRIPT_END",
+                  response, re.MULTILINE | re.DOTALL)
+    if m:
+        script = re.sub(r"^\s*```[a-zA-Z]*\s*$", "", m.group(1),
+                        flags=re.MULTILINE).strip()
+    else:
+        lines = response.splitlines()
+        start = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith("#!/"):
+                start = i; break
+        if start is None:
+            return None, None, None
+
+        def _prose(line):
+            s = line.strip()
+            if not s: return False
+            if re.match(r'^\d+[.)]\s', s): return True
+            if re.match(r'^[-*]\s+[A-Z]', s): return True
+            if re.match(r'^[A-Z][a-z]', s) and not any(
+                    c in s for c in '$=|;&{}()[]<>/\\'):
+                return True
+            return False
+
+        script_lines = []
+        for i, line in enumerate(lines[start:], start):
+            if re.match(r"^\s*FILENAME\s*:",    line, re.IGNORECASE): break
+            if re.match(r"^\s*SCRIPT_END\s*$",  line, re.IGNORECASE): break
+            if re.match(r"^\s*Option\s+\d+\s*:", line, re.IGNORECASE): break
+            if i > start and line.strip().startswith("#!/"):            break
+            if re.match(r"^\s*```", line):                              continue
+            if i > start and _prose(line):                              break
+            script_lines.append(line)
+        while script_lines and not script_lines[-1].strip():
+            script_lines.pop()
+        script = "\n".join(script_lines)
+
+    if not script.strip():
+        return None, None, None
+
+    first_line = script.splitlines()[0] if script.splitlines() else ""
+    if   "python"  in first_line: stype, ext = "python",     ".py"
+    elif "ruby"    in first_line: stype, ext = "ruby",       ".rb"
+    elif "perl"    in first_line: stype, ext = "perl",       ".pl"
+    elif "node"    in first_line: stype, ext = "javascript", ".js"
+    elif "swift"   in first_line: stype, ext = "swift",      ".swift"
+    elif "zsh"     in first_line: stype, ext = "zsh",        ".zsh"
+    elif "/sh"     in first_line: stype, ext = "sh",         ".sh"
+    else:                         stype, ext = "bash",        ".sh"
+
+    filename = None
+    for line in response.splitlines():
+        fm = re.search(r"FILENAME\s*:\s*(\S+)", line, re.IGNORECASE)
+        if fm:
+            candidate = fm.group(1)
+            # Reject generic placeholder names the AI sometimes emits
+            stem = re.sub(r'\.[^.]+$', '', candidate).lower()
+            if stem not in ("script", "my-script", "test", "untitled", "output",
+                            "descriptive-name", "your-script", "filename"):
+                filename = candidate
+            break
+    if not filename:
+        filename = _derive_filename(script, ext)
+
+    return script, stype, filename
+
+
+def _derive_filename(script, ext):
+    """
+    Derive a descriptive kebab-case filename from the script content.
+    Looks for a leading comment after the shebang, falling back to the
+    first non-trivial command word.
+    """
+    lines = script.splitlines()
+    # Skip shebang, look for a comment on the next line(s)
+    for line in lines[1:4]:
+        line = line.strip()
+        if line.startswith('#'):
+            text = line.lstrip('#').strip()
+            if 3 < len(text) <= 60:  # skip long prose / echoed-query comments
+                slug = re.sub(r'[^\w\s-]', '', text.lower())
+                slug = re.sub(r'[\s_]+', '-', slug).strip('-')
+                slug = slug[:40].rstrip('-')
+                if slug:
+                    return slug + ext
+    # Fall back to first meaningful command token
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith('#') and not line.startswith('set '):
+            token = re.split(r'[\s(]', line)[0]
+            token = re.sub(r'[^\w-]', '', token)
+            if len(token) > 2:
+                return token[:30] + ext
+    return f"unnamed{ext}"
+
+
+def validate_script(script, stype):
+    """Run validators on a script. Returns list of error strings (empty = clean)."""
+    errors = []
+    ext_map = {"python": ".py", "ruby": ".rb", "perl": ".pl",
+               "javascript": ".js", "swift": ".swift", "zsh": ".zsh"}
+    suffix = ext_map.get(stype, ".sh")
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False) as f:
+        f.write(script); tmp = f.name
+
+    def _run(cmd, label):
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        out = (r.stdout + r.stderr).strip().replace(tmp, "script")
+        if r.returncode != 0 and out:
+            errors.append(f"{label}:\n{out}")
+
+    try:
+        if stype in ("bash", "sh"):
+            shell = "bash" if stype == "bash" else "sh"
+            _run([shell, "-n", tmp], f"{shell} -n (syntax)")
+            if stype == "bash" and Path(SHELLCHECK).exists():
+                r = subprocess.run(
+                    [SHELLCHECK, "--shell=bash", "--format=gcc", tmp],
+                    capture_output=True, text=True)
+                if r.returncode != 0:
+                    errors.append("shellcheck:\n" +
+                                  r.stdout.strip().replace(tmp, "script"))
+        elif stype == "zsh":
+            _run(["zsh", "-n", tmp], "zsh -n (syntax)")
+        elif stype == "python":
+            _run(["python3", "-m", "py_compile", tmp], "python syntax")
+        elif stype == "ruby":
+            _run(["ruby", "-c", tmp], "ruby syntax")
+        elif stype == "perl":
+            _run(["perl", "-c", tmp], "perl syntax")
+        # swift / javascript: no fast checker available
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+
+    return errors
+
+
+def offer_save(script, suggested):
+    """Prompt to save a validated script. Offers chmod +x for shebang scripts."""
+    default_path = Path.home() / "Desktop" / suggested
+    print_info(f"script ready  ·  {len(script.splitlines())} lines")
+    print_info(f"  [enter]  save to Desktop as  {suggested}")
+    print_info("  [path ]  type a different destination")
+    print_info("  [n    ]  skip")
+
+    if _ui:
+        raw = (_ui.prompt(">") or "").strip()
+    else:
+        try:
+            raw = input("  > ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(); return
+
+    if raw.lower() == "n":
+        print_info("not saved"); return
+
+    # Sanity-check: reject inputs that look like prose rather than a file path
+    if raw and (len(raw) > 120 or (raw.count(' ') > 4 and not raw.startswith('/'))):
+        print_err("that doesn't look like a file path — skipping save")
+        print_info("use /write <path> to save manually")
+        return
+
+    p = default_path if not raw else (
+        Path(raw).expanduser() if Path(raw).expanduser().is_absolute()
+        else Path.home() / "Desktop" / raw
+    )
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(script + "\n")
+        print_ok(f"saved → {p}")
+    except PermissionError:
+        print_err(f"permission denied: {p}"); return
+    except Exception as e:
+        print_err(str(e)); return
+
+    first = script.splitlines()[0] if script.splitlines() else ""
+    if first.startswith("#!"):
+        if _ui:
+            yn = _ui.choose(("Yes, make executable", "No"), default=0)
+        else:
+            try:
+                yn = "Yes" if input("  make executable? [Y/n]: ").strip().lower() != "n" else "No"
+            except (EOFError, KeyboardInterrupt):
+                yn = "No"
+        if yn.startswith("Yes"):
+            p.chmod(p.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            print_ok(f"chmod +x {p}")
+
+
+# ── Session persistence ────────────────────────────────────────────────────────
+
+def _load_memory():
+    global _memory, _learned
+    try:
+        if MEMORY_FILE.exists():
+            data = json.loads(MEMORY_FILE.read_text())
+            # Support both old flat format and new sectioned format
+            if "pinned" in data or "learned" in data:
+                _memory  = data.get("pinned",  {})
+                _learned = data.get("learned", {})
+            else:
+                _memory  = data   # legacy flat file
+                _learned = {}
+    except Exception as e:
+        _memory = {}; _learned = {}
+        # Non-fatal — warn after UI is ready (stored as a deferred print)
+        import warnings
+        warnings.warn(f"platy: could not load memory file — {e}", stacklevel=2)
+
+def _save_memory_file():
+    """Atomically write memory to disk. Uses a temp file to avoid corruption."""
+    tmp = MEMORY_FILE.with_suffix(".tmp")
+    try:
+        tmp.write_text(json.dumps({"pinned": _memory, "learned": _learned}, indent=2))
+        tmp.replace(MEMORY_FILE)
+    except Exception as e:
+        if _ui:
+            _ui.add(f"  warning: memory not saved — {e}", TUI.CP_ERR)
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+def _pin_fact(text):
+    """Add a fact to persistent memory."""
+    key = hashlib.md5(text.encode()).hexdigest()[:8]
+    _memory[key] = text.strip()
+    _save_memory_file()
+    return key
+
+def _learn_fact(text, source="explicit"):
+    """Store a learned correction or taught fact."""
+    key = hashlib.md5(text.encode()).hexdigest()[:8]
+    _learned[key] = {"fact": text.strip(), "source": source,
+                     "ts": int(time.time())}
+    _save_memory_file()
+    return key
+
+def _forget_fact(key_or_text):
+    """Remove a fact from pinned memory or learned memory."""
+    removed = []
+    needle = key_or_text.lower()
+    for store in (_memory, _learned):
+        for k in list(store):
+            val = store[k]
+            text = val["fact"] if isinstance(val, dict) else val
+            if k.startswith(key_or_text) or text.lower() == needle:
+                removed.append(text)
+                del store[k]
+    if removed:
+        _save_memory_file()
+    return removed
+
+def _relative_time(ts):
+    """Return human-friendly relative time string from a Unix timestamp."""
+    diff = time.time() - ts
+    if diff < 60:          return "just now"
+    if diff < 3600:        return f"{int(diff/60)}m ago"
+    if diff < 86400:       return f"{int(diff/3600)}h ago"
+    if diff < 86400 * 2:   return "yesterday"
+    if diff < 86400 * 7:   return f"{int(diff/86400)}d ago"
+    return datetime.fromtimestamp(ts).strftime("%b %-d")
+
+def _meta_path(sess_path):
+    return Path(str(sess_path).replace(".jsonl", ".meta.json"))
+
+def _save_session_meta(sess_path, label=None):
+    mp = _meta_path(sess_path)
+    try:
+        meta = json.loads(mp.read_text()) if mp.exists() else {}
+    except Exception:
+        meta = {}
+    meta["updated"] = time.time()
+    if label:
+        meta["label"] = label
+    tmp = mp.with_suffix(".tmp")
+    try:
+        tmp.write_text(json.dumps(meta))
+        tmp.replace(mp)
+    except Exception:
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+def _load_session_meta(sess_path):
+    """Returns (label, updated_ts) or ('', mtime)."""
+    mp = _meta_path(sess_path)
+    try:
+        meta = json.loads(mp.read_text())
+        return meta.get("label", ""), meta.get("updated", sess_path.stat().st_mtime)
+    except Exception:
+        try:
+            return "", sess_path.stat().st_mtime
+        except Exception:
+            return "", 0.0
+
+def _generate_session_label(messages):
+    """Generate a ≤5-word label from the first user message via delegate."""
+    for m in messages:
+        if m.get("role") == "user":
+            content = m["content"][:200]
+            task = f"Summarise this in 5 words or fewer, title-case, no punctuation: {content}"
+            label = _run_delegate(task)
+            # Strip quotes, truncate to 5 words
+            label = label.strip().strip('"\'')
+            words = label.split()[:5]
+            return " ".join(words)
+    return ""
+
+SESSION_TTL_DAYS = 14
+
+def _prune_old_sessions():
+    """Delete sessions (and their .meta.json) not updated in SESSION_TTL_DAYS. Runs in background."""
+    cutoff = time.time() - SESSION_TTL_DAYS * 86400
+    try:
+        for p in list(SESS_DIR.iterdir()):
+            if p.suffix != ".jsonl":
+                continue
+            try:
+                _, updated = _load_session_meta(p)
+                if updated < cutoff:
+                    p.unlink(missing_ok=True)
+                    _meta_path(p).unlink(missing_ok=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+def new_session(base="session"):
+    name = f"{base}--{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
+    path = SESS_DIR / f"{name}.jsonl"
+    path.touch()
+    return name, path
+
+def save_turn(path, role, content):
+    try:
+        with open(path, "a") as f:
+            f.write(json.dumps({"role": role, "content": content}) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError as e:
+        if _ui:
+            _ui.add(f"  warning: session not saved — {e}", TUI.CP_ERR)
+    _save_session_meta(path)   # keep updated timestamp current
+
+def load_session_messages(name):
+    """Load all messages from a session file. Skips corrupted lines silently."""
+    jl = SESS_DIR / f"{name}.jsonl"
+    if not jl.exists():
+        return None, None
+    msgs = []
+    with open(jl) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    msgs.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass   # skip any corrupted line rather than crashing
+    return name, msgs
+
+
+# ── Conversation summarization ────────────────────────────────────────────────
+
+def _maybe_summarize(messages, threshold=24):
+    """If conversation exceeds threshold turns, summarize the oldest half."""
+    user_turns = [m for m in messages if m["role"] in ("user", "assistant")]
+    if len(user_turns) < threshold:
+        return messages
+    system = [m for m in messages if m["role"] == "system"]
+    convo  = [m for m in messages if m["role"] != "system"]
+    half   = len(convo) // 2
+    to_summarize = convo[:half]
+    keep         = convo[half:]
+    blob = "\n".join(f"{m['role'].upper()}: {m['content'][:300]}" for m in to_summarize)
+    summary = _run_delegate(
+        f"Summarize this conversation segment in 3-5 sentences, preserving key facts "
+        f"and decisions:\n\n{blob}"
+    )
+    summary_msg = {"role": "user",
+                   "content": f"[Earlier conversation summary: {summary}]"}
+    return system + [summary_msg] + keep
+
+# ── Reminder / notification ────────────────────────────────────────────────────
+
+_REMIND_RE = re.compile(
+    r'remind me (?:in )?(\d+)\s*(min(?:ute)?s?|hour?s?|sec(?:ond)?s?)\s+(?:to\s+)?(.+)',
+    re.IGNORECASE
+)
+
+def _schedule_reminder(text):
+    """Parse 'remind me in X minutes to Y' and fire a macOS notification."""
+    m = _REMIND_RE.search(text)
+    if not m:
+        return False
+    amount, unit, task = int(m.group(1)), m.group(2).lower(), m.group(3).strip()
+    if "sec" in unit:   delay = amount
+    elif "hour" in unit: delay = amount * 3600
+    else:               delay = amount * 60
+
+    # Escape backslashes and double quotes so the task text cannot break out
+    # of the AppleScript string and inject arbitrary commands.
+    safe_task = task.replace("\\", "\\\\").replace('"', '\\"')
+    script = (f'delay {delay}\n'
+              f'display notification "{safe_task}" with title "platy reminder" '
+              f'sound name "Ping"')
+    threading.Thread(
+        target=lambda: subprocess.run(["osascript", "-e", script],
+                                      capture_output=True),
+        daemon=True
+    ).start()
+    return True
+
+# ── File watcher ───────────────────────────────────────────────────────────────
+
+def _start_watch(path_str, messages, sess_path):
+    """Watch a file and inject changes into context when it updates."""
+    p = Path(path_str).expanduser().resolve()
+    if not p.exists():
+        return False
+    _watched_files[str(p)] = p.stat().st_mtime
+
+    def _watch_loop():
+        consecutive_errors = 0
+        while str(p) in _watched_files:
+            time.sleep(2)
+            try:
+                mtime = p.stat().st_mtime
+                if mtime != _watched_files.get(str(p)):
+                    _watched_files[str(p)] = mtime
+                    content = p.read_text(errors="replace")[:4000]
+                    inject  = f"[file updated: {p.name}]\n\n{content}"
+                    messages.append({"role": "user", "content": inject})
+                    save_turn(sess_path, "user", inject)
+                    if _ui:
+                        _ui.add(f"  ⟳ {p.name} changed — injected into context",
+                                TUI.CP_CYAN)
+                        _ui.redraw()
+                consecutive_errors = 0
+            except FileNotFoundError:
+                # File was deleted — stop watching silently
+                _watched_files.pop(str(p), None)
+                break
+            except Exception:
+                consecutive_errors += 1
+                if consecutive_errors >= 5:
+                    # Persistent failure — give up
+                    _watched_files.pop(str(p), None)
+                    break
+    threading.Thread(target=_watch_loop, daemon=True).start()
+    return True
+
+# ── Help ──────────────────────────────────────────────────────────────────────
+
+def show_help():
+    cmds = [
+        ("/web <query>",    "search the web and send results to AI"),
+        ("/apple <query>", "search Apple Developer documentation"),
+        ("/docs <query>",  f"search {DOCS_NAME + ' docs' if DOCS_NAME else 'configured product docs'} (set PLATY_DOCS_SITES)"),
+        ("/sources",         "list sources from the last web search"),
+        ("/serper",         "toggle Serper search (default: DuckDuckGo)"),
+        ("/think",          "toggle deep reasoning mode"),
+        ("/mood <name>",    "set personality mood: default/focused/playful/direct"),
+        ("/pin <fact>",     "remember a fact permanently across sessions"),
+        ("/learn <fact>",   "teach the AI a correction or fact it should remember"),
+        ("/forget <fact>",  "remove a pinned or learned fact from memory"),
+        ("/memory",         "browse and edit all pinned and learned facts"),
+        ("/read <path>",    "inject a file into the conversation"),
+        ("/watch <path>",   "watch a file and auto-inject changes"),
+        ("/unwatch",        "stop watching all files"),
+        ("/write <path>",   "write the last AI response to a file"),
+        ("/run",            "execute the last generated script"),
+        ("/diff <path>",    "diff a file against the last generated script"),
+        ("/paste",          "inject clipboard contents into context"),
+        ("/retry",          "re-send your last message"),
+        ("/export",         "export this session as plain text"),
+        ("/history",        "search past sessions"),
+        ("/model",          "pin a specific model (disables auto-select)"),
+        ("/auto",           "re-enable automatic model selection"),
+        ("/sessions",       "open the session manager"),
+        ("/load <name>",    "resume a saved session by name"),
+        ("/clear",          "clear chat and reset conversation"),
+        ("/exit",           "quit"),
+        ("/help",           "show this message"),
+    ]
+    search_status = ("Serper" if (SERPER_KEY and _use_serper)
+                     else "DuckDuckGo" + ("  ·  /serper to switch to Serper" if SERPER_KEY else ""))
+    print_info("")
+    print_info("commands")
+    print_info("")
+    for cmd, desc in cmds:
+        print_info(f"  {cmd:<26}  {desc}")
+    print_info("")
+    print_info(f"search engine:  {search_status}")
+    print_info("")
+    print_info("tips:")
+    print_info("  ctrl-c interrupts generation mid-stream")
+    print_info("  drag any file or folder from Finder — it's auto-read")
+    print_info("  news / weather / price queries are searched automatically")
+    print_info("  PgUp / PgDn scrolls the chat history")
+    print_info("  ↑ / ↓ browses your command history")
+    print_info("")
+
+
+# ── TUI main loop ─────────────────────────────────────────────────────────────
+
+def _tui_main(stdscr):
+    global _ui
+    _ui = TUI(stdscr)
+
+    model         = DEFAULT_MODEL   # heavy/pinned model
+    _auto_mode    = True            # False after /model, True after /auto
+    _has_file     = False           # True when a file is in context
+    global _use_serper, _deep_think, _mood, _last_query
+    _use_serper   = False
+    _deep_think   = False
+    _mood         = "default"
+    _last_query   = ""
+    _load_memory()
+    sess_name, sess_path = new_session()
+
+    # Expose current session/model for self-awareness (_sys_ctx reads these)
+    global _platy_model, _platy_session
+    _platy_model   = model
+    _platy_session = sess_name
+
+    _ui.set_header(model, sess_name)
+    _ensure_calendar(force=True)   # kick off background calendar fetch at startup
+    threading.Thread(target=_clipboard_watcher, daemon=True).start()
+    threading.Thread(target=_prune_old_sessions, daemon=True).start()
+
+    for line in _MASCOT:
+        _ui.pin(line, TUI.CP_CYAN, bold=True)
+    _ui.pin("")
+    _ui.pin("type /help for commands  ·  /sessions to manage sessions  ·  /exit to quit", TUI.CP_INFO)
+    _ui.pin("auto model selection is ON  ·  /model to pin a model  ·  /auto to re-enable", TUI.CP_INFO)
+    _ui.redraw()
+
+    messages      = [{"role": "system", "content": SYSTEM_PROMPT}]
+    last_response = ""
+    raw_response  = ""
+
+    while True:
+        try:
+            user_input = _ui.get_input()
+        except KeyboardInterrupt:
+            _ui.add("")
+            _ui.add("  (interrupted — type /exit to quit)", TUI.CP_INFO)
+            continue
+
+        if user_input is None:   # Ctrl+D
+            break
+        if not user_input:
+            continue
+
+        # ── commands ──────────────────────────────────────────────────────────
+
+        if user_input == "/exit":
+            print_info("bye.")
+            break
+
+        elif user_input == "/clear":
+            messages      = [{"role": "system", "content": SYSTEM_PROMPT}]
+            last_response = ""
+            _has_file     = False
+            _ui.clear_chat()
+            _ui.set_header(model, sess_name)
+            print_info("conversation cleared")
+            continue
+
+        elif user_input == "/help":
+            show_help()
+            continue
+
+        elif user_input == "/auto":
+            _auto_mode = True
+            print_info("auto model selection ON")
+            continue
+
+        elif user_input == "/sources":
+            display_sources()
+            continue
+
+        elif user_input == "/serper":
+            if not SERPER_KEY:
+                print_err("SERPER_API_KEY not set — set it to use Serper")
+            else:
+                _use_serper = not _use_serper
+                print_info(f"web search: {'Serper' if _use_serper else 'DuckDuckGo'}")
+            continue
+
+        elif user_input == "/think":
+            _deep_think = not _deep_think
+            print_info(f"deep think mode {'ON  — I will reason carefully before every answer' if _deep_think else 'OFF'}")
+            continue
+
+        elif user_input.startswith("/mood"):
+            name = user_input[5:].strip().lower()
+            if not name:
+                print_info(f"current mood: {_mood}  ·  options: {', '.join(MOODS)}")
+            elif name not in MOODS:
+                print_err(f"unknown mood '{name}'  ·  options: {', '.join(MOODS)}")
+            else:
+                _mood = name
+                print_info(f"mood set to: {_mood}")
+            continue
+
+        elif user_input.startswith("/apple "):
+            query = user_input[7:].strip()
+            if query:
+                _ui.spin_update("○  searching Apple docs…")
+                results, sources = _apple_docs_search(query)
+                _ui.spin_stop()
+                if results:
+                    search_ctx = (f"Apple Developer documentation results for '{query}':\n\n{results}\n\n"
+                                  f"Using ONLY these results, answer: {query}\n"
+                                  f"Answer naturally — do not cite source numbers inline. Sources are stored separately.")
+                    messages.append({"role": "user", "content": search_ctx})
+                    save_turn(sess_path, "user", search_ctx)
+                    print_user(query)
+                    # Use current model — 'active' isn't defined until normal query path
+                    raw_response, last_response = ask(messages, model)
+                    messages.append({"role": "assistant", "content": last_response})
+                    save_turn(sess_path, "assistant", last_response)
+                    show_sources(sources)
+                else:
+                    print_err("no Apple docs found — try /web for a broader search")
+            continue
+
+        elif user_input.startswith("/docs "):
+            query = user_input[6:].strip()
+            if not DOCS_SITES:
+                print_err("no product docs configured — set PLATY_DOCS_SITES in your environment")
+                print_info("  example:  export PLATY_DOCS_SITES='site:docs.example.com'")
+                print_info("  optional: export PLATY_DOCS_NAME='MyProduct'")
+            elif query:
+                docs_label = DOCS_NAME or "product"
+                _ui.spin_update(f"○  searching {docs_label} docs…")
+                results, sources = _product_docs_search(query)
+                _ui.spin_stop()
+                if results:
+                    search_ctx = (f"{docs_label} documentation results for '{query}':\n\n{results}\n\n"
+                                  f"Using ONLY these results, answer: {query}\n"
+                                  f"Answer naturally — do not cite source numbers inline. Sources are stored separately.")
+                    messages.append({"role": "user", "content": search_ctx})
+                    save_turn(sess_path, "user", search_ctx)
+                    print_user(query)
+                    raw_response, last_response = ask(messages, model)
+                    messages.append({"role": "assistant", "content": last_response})
+                    save_turn(sess_path, "assistant", last_response)
+                    show_sources(sources)
+                else:
+                    print_err(f"no {docs_label} docs found — try /web for a broader search")
+            continue
+
+        elif user_input.startswith("/pin "):
+            fact = user_input[5:].strip()
+            if fact:
+                _pin_fact(fact)
+                print_ok(f"pinned: {fact}")
+            continue
+
+        elif user_input.startswith("/learn "):
+            fact = user_input[7:].strip()
+            if fact:
+                _learn_fact(fact, source="explicit")
+                print_ok(f"learned: {fact}")
+            continue
+
+        elif user_input.startswith("/forget "):
+            removed = _forget_fact(user_input[8:].strip())
+            if removed:
+                print_ok(f"forgotten: {removed[0]}")
+            else:
+                print_err("no matching memory found")
+            continue
+
+        elif user_input == "/memory":
+            if _ui:
+                memory_browser(_ui.stdscr)
+                _ui.redraw()
+            else:
+                if not _memory and not _learned:
+                    print_info("nothing stored yet — use /pin or /learn to add facts")
+                else:
+                    if _memory:
+                        print_info("  — pinned —")
+                        for k, v in _memory.items():
+                            print_info(f"  [{k}] {v}")
+                    if _learned:
+                        print_info("  — learned —")
+                        for k, v in _learned.items():
+                            fact = v["fact"] if isinstance(v, dict) else v
+                            src  = v.get("source", "?") if isinstance(v, dict) else "?"
+                            print_info(f"  [{k}] ({src}) {fact}")
+            continue
+
+        elif user_input.startswith("/watch "):
+            p = user_input[7:].strip()
+            if _start_watch(p, messages, sess_path):
+                print_ok(f"watching: {p}")
+            else:
+                print_err(f"file not found: {p}")
+            continue
+
+        elif user_input == "/unwatch":
+            _watched_files.clear()
+            print_info("stopped watching all files")
+            continue
+
+        elif user_input == "/paste":
+            try:
+                clip = subprocess.run(["pbpaste"], capture_output=True,
+                                       text=True, timeout=5).stdout.strip()
+                if clip:
+                    inject = f"[clipboard contents]\n\n{clip[:4000]}"
+                    messages.append({"role": "user", "content": inject})
+                    save_turn(sess_path, "user", inject)
+                    print_ok(f"clipboard injected ({len(clip)} chars)")
+                else:
+                    print_err("clipboard is empty")
+            except Exception as e:
+                print_err(f"clipboard error: {e}")
+            continue
+
+        elif user_input == "/retry":
+            if not _last_query:
+                print_err("nothing to retry yet")
+                continue
+            user_input = _last_query
+            # fall through to normal processing below
+
+        elif user_input == "/run":
+            script, _, _ = extract_script(raw_response)
+            if not script:
+                print_err("no script to run — ask the AI to write one first")
+            else:
+                print_info("running script…")
+                try:
+                    result = subprocess.run(
+                        ["bash", "-c", script], capture_output=True,
+                        text=True, timeout=30
+                    )
+                    out = (result.stdout + result.stderr).strip()
+                    for line in (out[:2000] if out else "(no output)").splitlines():
+                        print_info(f"  {line}")
+                    if result.returncode != 0:
+                        print_err(f"exited with code {result.returncode}")
+                except subprocess.TimeoutExpired:
+                    print_err("script timed out after 30s")
+                except Exception as e:
+                    print_err(str(e))
+            continue
+
+        elif user_input.startswith("/diff "):
+            script, _, _ = extract_script(raw_response)
+            if not script:
+                print_err("no script in last response to diff against")
+            else:
+                fpath = Path(user_input[6:].strip()).expanduser()
+                if not fpath.exists():
+                    print_err(f"file not found: {fpath}")
+                else:
+                    import difflib as _dl
+                    a = fpath.read_text().splitlines(keepends=True)
+                    b = script.splitlines(keepends=True)
+                    diff = list(_dl.unified_diff(a, b,
+                                fromfile=str(fpath), tofile="AI script"))
+                    if not diff:
+                        print_ok("no differences")
+                    else:
+                        for line in diff:
+                            line = line.rstrip("\n")
+                            cp, _ = _diff_style(line)
+                            _ui.add(line, cp) if _ui else print(line)
+            continue
+
+        elif user_input == "/export":
+            ts   = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+            dest = Path.home() / "Desktop" / f"platy-export-{ts}.txt"
+            try:
+                lines = []
+                for m in messages:
+                    if m["role"] == "system":
+                        continue
+                    prefix = "you" if m["role"] == "user" else "AI"
+                    lines.append(f"[{prefix}]\n{m['content']}\n")
+                dest.write_text("\n".join(lines))
+                print_ok(f"exported → {dest}")
+            except Exception as e:
+                print_err(str(e))
+            continue
+
+        elif user_input.startswith("/history"):
+            query = user_input[8:].strip()
+            hits  = []
+            for p in sorted(SESS_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+                if p.suffix != ".jsonl":
+                    continue
+                try:
+                    text = p.read_text()
+                    if not query or query.lower() in text.lower():
+                        label, updated = _load_session_meta(p)
+                        hits.append((label or p.stem, _relative_time(updated), p.stem))
+                except Exception:
+                    continue
+            if not hits:
+                print_info("no matching sessions found")
+            else:
+                print_info(f"  {'label':<38}  {'when':<12}  session id")
+                for label, rel, stem in hits[:15]:
+                    print_info(f"  {label:<38}  {rel:<12}  {stem}")
+                print_info("  use /load <session id> to resume")
+            continue
+
+        elif user_input == "/sessions":
+            loaded_name, loaded_msgs = session_manager(stdscr)
+            _ui.redraw()
+            if loaded_name:
+                sess_name      = loaded_name
+                _platy_session = sess_name
+                sess_path = SESS_DIR / f"{sess_name}.jsonl"
+                messages  = ([{"role": "system", "content": SYSTEM_PROMPT}]
+                             + loaded_msgs)
+                _has_file = False
+                _ui.set_header(model, sess_name)
+                _ui.clear_chat()
+                print_info(f"resumed: {sess_name}  ({len(loaded_msgs)} turns)")
+            continue
+
+        elif user_input == "/model":
+            chosen = pick_model(current=model, stdscr=_ui.stdscr)
+            _ui.redraw()
+            if chosen != model or _auto_mode:
+                model      = chosen
+                _auto_mode = False
+                _platy_model = model
+                _ui.set_header(model, sess_name)
+                print_info(f"model pinned: {model}  (auto selection OFF)")
+            else:
+                print_info(f"keeping current model: {model}")
+            continue
+
+        elif user_input.startswith("/load "):
+            name = user_input[6:].strip()
+            n, loaded = load_session_messages(name)
+            if n:
+                sess_name      = n
+                _platy_session = sess_name
+                sess_path = SESS_DIR / f"{n}.jsonl"
+                messages  = ([{"role": "system", "content": SYSTEM_PROMPT}]
+                             + loaded)
+                _has_file = False
+                _ui.set_header(model, sess_name)
+                _ui.clear_chat()
+                print_info(f"resumed: {sess_name}  ({len(loaded)} turns)")
+            else:
+                print_err(f"session not found: {name}")
+            continue
+
+        elif user_input.startswith("/web "):
+            query = user_input[5:].strip()
+            if not query:
+                print_err("usage: /web <query>"); continue
+            _ui.spin_update("○  searching…")
+            results, sources = web_search(query)
+            _ui.spin_stop()
+            if not results:
+                print_err("no results found"); continue
+            print_ok(f"web results for: {query}")
+            user_input = query
+            search_ctx = (f"Web search results for '{query}':\n\n{results}\n\n"
+                          f"Using ONLY these results, answer: {query}\n"
+                          f"IMPORTANT: Each result above is prefixed [N]. "
+                          f"Cite each source by its number [N] inline as you mention it. "
+                          f"Do not invent sources not listed above.")
+            messages.append({"role": "user", "content": search_ctx})
+            save_turn(sess_path, "user", search_ctx)
+            print_user(user_input)
+            # web results → fast model is fine
+            active = _light_model() if _auto_mode else model
+            _ui.set_header(active, sess_name)
+            raw_response, last_response = ask(messages, active)
+            _ui.set_header(model, sess_name)
+            messages.append({"role": "assistant", "content": last_response})
+            save_turn(sess_path, "assistant", last_response)
+            show_sources(sources)
+            rule()
+            continue
+
+        elif user_input.startswith("/read "):
+            result = read_file(user_input[6:].strip())
+            if result:
+                fpath, content = result
+                inject = f"[file loaded: {fpath}]\n\n{content}"
+                messages.append({"role": "user", "content": inject})
+                save_turn(sess_path, "user", inject)
+                _has_file = True
+                print_info("file is in context — ask me anything about it")
+            continue
+
+        elif user_input.startswith("/write "):
+            if not last_response:
+                print_err("no response to write yet")
+            else:
+                script, _, _ = extract_script(raw_response)
+                content = script if script else last_response.strip()
+                write_file(user_input[7:].strip(), content)
+            continue
+
+        # ── drag-and-drop ─────────────────────────────────────────────────────
+        dropped_path, remainder = detect_drop(user_input)
+        if dropped_path:
+            context = None
+            if dropped_path.is_file():
+                try:
+                    content = dropped_path.read_text(errors="replace")
+                    print_ok(f"file    {dropped_path}  ({len(content):,} chars)")
+                    context = f"[file: {dropped_path}]\n\n{content}"
+                    _has_file = True
+                except PermissionError:
+                    print_err(f"permission denied: {dropped_path}"); continue
+            elif dropped_path.is_dir():
+                summary = dir_summary(dropped_path)
+                print_ok(f"folder  {dropped_path}")
+                context = f"[folder: {dropped_path}]\n\n{summary}"
+            if context:
+                messages.append({"role": "user", "content": context})
+                save_turn(sess_path, "user", context)
+                user_input = remainder if remainder else (
+                    "I just shared this with you. Briefly describe what it is "
+                    "and tell me what you can help me do with it."
+                )
+
+        # ── auto-learn corrections ────────────────────────────────────────────
+        if last_response and _CORRECTION_RE.match(user_input):
+            correction = _CORRECTION_RE.sub("", user_input, count=1).strip()
+            if correction:
+                _learn_fact(correction, source="correction")
+                print_info(f"  ✎ learned: {correction}")
+
+        # ── auto web / Apple docs search ──────────────────────────────────────
+        pending_sources = []
+        _writing     = _is_writing_task(user_input)
+        _pasted_text = _is_pasted_prose(user_input) and not _writing
+        # If the user typed text before or after the paste, they already gave
+        # their instruction — don't ask again, just proceed.
+        if _pasted_text and _ui:
+            pr = getattr(_ui, '_last_paste_range', None)
+            if pr is not None:
+                ps, pe = pr
+                if user_input[:ps].strip() or user_input[pe:].strip():
+                    _pasted_text = False
+        if not _writing and not _pasted_text:
+            if _DOCS_RE and _DOCS_RE.search(user_input) and DOCS_SITES:
+                docs_label = DOCS_NAME or "product"
+                _ui.spin_update(f"○  searching {docs_label} docs…")
+                results, pending_sources = _product_docs_search(user_input)
+                _ui.spin_stop()
+                if results:
+                    search_ctx = (f"{docs_label} documentation for '{user_input}':\n\n{results}\n\n"
+                                  f"Using ONLY these results, answer: {user_input}\n"
+                                  f"Answer naturally — do not cite source numbers inline. Sources are stored separately.")
+                    messages.append({"role": "user", "content": search_ctx})
+                    save_turn(sess_path, "user", search_ctx)
+                    print_ok(f"{docs_label} docs loaded")
+            elif _APPLE_RE.search(user_input) and not needs_search(user_input):
+                _ui.spin_update("○  searching Apple docs…")
+                results, pending_sources = _apple_docs_search(user_input)
+                _ui.spin_stop()
+                if results:
+                    search_ctx = (f"Apple Developer documentation for '{user_input}':\n\n{results}\n\n"
+                                  f"Using ONLY these results, answer: {user_input}\n"
+                                  f"Answer naturally — do not cite source numbers inline. Sources are stored separately.")
+                    messages.append({"role": "user", "content": search_ctx})
+                    save_turn(sess_path, "user", search_ctx)
+                    print_ok("Apple docs loaded")
+            elif needs_search(user_input) or needs_entity_search(user_input):
+                _ui.spin_update("○  searching…")
+                results, pending_sources = web_search(user_input)
+                _ui.spin_stop()
+                if results:
+                    search_ctx = (f"Web search results for '{user_input}':\n\n{results}\n\n"
+                                  f"Using ONLY these results, answer: {user_input}\n"
+                                  f"IMPORTANT: Each result above is prefixed [N]. "
+                                  f"Cite each source by its number [N] inline as you mention it. "
+                                  f"Do not invent sources not listed above.")
+                    messages.append({"role": "user", "content": search_ctx})
+                    save_turn(sess_path, "user", search_ctx)
+                    print_ok("web search complete")
+
+        # ── pick model for this turn ──────────────────────────────────────────
+        if _deep_think:
+            active = model   # deep think always needs the full/capable model
+        elif _auto_mode:
+            tier   = _classify(user_input, has_file=_has_file)
+            active = _light_model() if tier == "fast" else model
+        else:
+            active = model
+            # Proactive upgrade: user pinned a small model but query is complex
+            if _is_small_model(active) and _classify(user_input, has_file=_has_file) == "full":
+                better = _next_capable_model(active)
+                if better:
+                    print_info(f"  query looks complex for {active} — upgrading to {better} for this turn")
+                    active = better
+                elif ANTHROPIC_KEY:
+                    claude = _claude_upgrade_model()
+                    if claude:
+                        print_info(f"  {active} may struggle with this — no stronger local model available")
+                        ans = _ui.choose((f"Yes, use {claude} (costs money)", f"No, keep {active}"), default=1) if _ui \
+                              else "No"
+                        if ans.startswith("Yes"):
+                            active = claude
+
+        # ── send to AI ────────────────────────────────────────────────────────
+        # Fuzzy-fix mistyped commands before they reach the model
+        user_input = _fix_command(user_input)
+        # Check for inline reminder request
+        if _schedule_reminder(user_input):
+            unit_hint = re.search(r'(\d+\s*(?:min|hour|sec)\w*)', user_input, re.I)
+            print_ok(f"reminder set for {unit_hint.group(1) if unit_hint else 'the specified time'}")
+        _last_query = user_input
+        # Prepend deep-think trigger when mode is on
+        ai_content = ("[DEEP THINK] " + user_input) if _deep_think else user_input
+        # For writing/editing tasks: reinforce genuine rewriting, offer options
+        if _writing:
+            ai_content += (
+                "\n\n[WRITING TASK RULES — follow exactly:\n"
+                "1. Genuinely rewrite — produce a real paraphrase, not just a minor tweak or "
+                "single-word change. Rework the sentence structure and word choice.\n"
+                "2. Make it professional and concise.\n"
+                "3. If you can think of 2 or 3 meaningfully different ways to express it, "
+                "present them as numbered options: 1. ... 2. ... 3. ...\n"
+                "4. Output ONLY the rewrite(s). No 'Here is the rewrite:', no explanation, "
+                "no commentary before or after.]"
+            )
+        # For pasted prose with no instruction: ask what to do — don't analyse unprompted
+        if _pasted_text:
+            ai_content += (
+                "\n\n[PASTED TEXT: The user has pasted text for you to work on. "
+                "Do NOT summarise, analyse, or comment on it. "
+                "Ask one short question: what would they like you to do with it?]"
+            )
+        print_user(user_input)
+        # Auto-summarize if conversation is getting long
+        messages = _maybe_summarize(messages)
+        messages.append({"role": "user", "content": ai_content})
+        save_turn(sess_path, "user", user_input)
+
+        # Show active model in header during generation
+        if active != model:
+            _ui.set_header(active, sess_name)
+
+        _no_search = not bool(pending_sources)
+        raw_response, last_response = ask(messages, active,
+                                          strip_phantom_cites=_no_search)
+
+        # ── auto-upgrade if small model signalled it can't handle the query ──
+        um = _UPGRADE_RE.search(raw_response)
+        if um and _is_small_model(active):
+            reason = um.group(1).strip()
+            better = _next_capable_model(active)
+            if better:
+                # Local upgrade available — switch silently
+                print_info(f"  {active}: {reason}")
+                print_info(f"  switching to {better}…")
+                _ui.set_header(better, sess_name)
+                raw_response, last_response = ask(
+                    messages + [{"role": "user", "content": ai_content}], better,
+                    strip_phantom_cites=_no_search)
+                _ui.set_header(model, sess_name)
+            elif ANTHROPIC_KEY:
+                # No local upgrade — offer Claude with explicit approval
+                claude = _claude_upgrade_model()
+                if claude:
+                    print_info(f"  {active}: {reason}")
+                    print_info(f"  no stronger local model found — Claude ({claude}) could handle this")
+                    print_info(f"  Claude API charges per message — your call:")
+                    ans = _ui.choose((f"Yes, use {claude}", "No, skip"), default=1) if _ui else "No"
+                    if ans.startswith("Yes"):
+                        _ui.set_header(claude, sess_name)
+                        raw_response, last_response = ask(
+                            messages + [{"role": "user", "content": ai_content}], claude,
+                            strip_phantom_cites=_no_search)
+                        _ui.set_header(model, sess_name)
+                    else:
+                        print_info("  keeping local model — response may be limited")
+            else:
+                print_info(f"  {active}: {reason} — no stronger model available locally")
+
+        # ── handle agent blocks (parallel delegates, shell, specialized agents) ──
+        delegate_tasks = _DELEGATE_RE.findall(raw_response)
+        shell_cmds     = _SHELL_RE.findall(raw_response)
+        agent_blocks   = _AGENT_RE.findall(raw_response)   # list of (role, task)
+
+        result_parts = []
+
+        if delegate_tasks:
+            tasks_clean = [t.strip() for t in delegate_tasks]
+            if len(tasks_clean) > 1:
+                print_info(f"  running {len(tasks_clean)} parallel delegates…")
+            else:
+                print_info(f"  delegating: {tasks_clean[0][:70]}…")
+            for t, r in _run_parallel_delegates(tasks_clean):
+                result_parts.append(f"[DELEGATE RESULT]: {r}")
+
+        for cmd in shell_cmds:
+            result_parts.append(f"[SHELL RESULT]: {_run_shell_agent(cmd.strip())}")
+
+        for role, task in agent_blocks:
+            role = role.strip(); task = task.strip()
+            print_info(f"  agent [{role}]: {task[:60]}…")
+            result_parts.append(f"[AGENT RESULT: {role}]: {_run_iterative_agent(role, task, active)}")
+
+        if result_parts:
+            messages.append({"role": "assistant", "content": last_response})
+            inject = "\n\n".join(result_parts) + "\n\nNow give your final answer using these results."
+            messages.append({"role": "user", "content": inject})
+            raw_response, last_response = ask(messages, active)
+            messages.pop(); messages.pop()
+
+        # Restore header, save final response
+        _ui.set_header(model, sess_name)
+
+        # ── stale-knowledge retry ─────────────────────────────────────────────
+        # If AI admitted it lacks current info AND no web search was done yet, retry with search.
+        # Never retry for writing/editing tasks — stale training data is irrelevant there.
+        if not _writing and _STALE_RE.search(last_response) and not pending_sources:
+            _ui.spin_update("○  AI lacks current info — searching the web…")
+            results, pending_sources = web_search(user_input)
+            _ui.spin_stop()
+            if results:
+                # Pop the stale assistant message, inject search context, re-ask
+                messages.pop() if messages and messages[-1]["role"] == "assistant" else None
+                search_ctx = (f"Web search results for '{user_input}':\n\n{results}\n\n"
+                              f"Using ONLY these results, answer: {user_input}\n"
+                              f"IMPORTANT: Each result is prefixed [N]. "
+                              f"Answer naturally — do not cite source numbers inline. Sources are stored separately.")
+                messages.append({"role": "user", "content": search_ctx})
+                raw_response, last_response = ask(messages, active)
+                messages.pop()   # remove injected search context from history
+                print_ok("auto-searched — using live results")
+
+        messages.append({"role": "assistant", "content": last_response})
+        save_turn(sess_path, "assistant", last_response)
+        show_sources(pending_sources)
+        if last_response and _ui:
+            _ui.add("")
+            src_hint = "  /sources · view sources  ·  " if _last_sources else ""
+            _ui.add(f"  {src_hint}ctrl+b · copy response", TUI.CP_INFO, dim=True)
+            _ui.add("")
+
+        # ── The Platypus Fallacy check (instant regex) ───────────────────────────
+        false_claims = _check_hallucinations(last_response)
+        for claim in false_claims:
+            print_err(f"  Platypus Fallacy detected — {claim}")
+
+        # Generate session label after first real exchange (background thread)
+        user_turns = sum(1 for m in messages if m["role"] == "user"
+                         and not m["content"].startswith("["))
+        if user_turns == 1:
+            threading.Thread(
+                target=lambda: _save_session_meta(
+                    sess_path, _generate_session_label(messages)),
+                daemon=True
+            ).start()
+
+        # ── validate & auto-fix any script ────────────────────────────────────
+        script, stype, fname = extract_script(raw_response)
+        if script:
+            last_errors = []
+            for attempt in range(MAX_FIX_ATTEMPTS):
+                last_errors = validate_script(script, stype)
+                if not last_errors:
+                    break
+                print_err(f"{len(last_errors)} validation issue(s) — asking AI to fix "
+                          f"(attempt {attempt + 1}/{MAX_FIX_ATTEMPTS})")
+                for e in last_errors:
+                    for ln in e.splitlines():
+                        print_info(f"    {ln}")
+
+                fix_prompt = (
+                    "The script has the following errors. "
+                    "Fix every issue and rewrite the COMPLETE corrected script "
+                    "using the mandatory SCRIPT_START / SCRIPT_END markers. "
+                    "Put ONLY code inside the markers — no prose, no explanations, "
+                    "no numbered lists, no 'To run:' lines:\n\n"
+                    + "\n\n".join(last_errors)
+                )
+                messages.append({"role": "user", "content": fix_prompt})
+                save_turn(sess_path, "user", fix_prompt)
+                raw_response, last_response = ask(messages, active)
+                messages.append({"role": "assistant", "content": last_response})
+                save_turn(sess_path, "assistant", last_response)
+                script, stype, fname = extract_script(raw_response)
+                if not script:
+                    break
+            else:
+                if last_errors:
+                    print_err(f"script still has issues after {MAX_FIX_ATTEMPTS} attempts")
+                    print_info("use /write <path> to save it manually if you still want it")
+
+            if script:
+                if not last_errors:
+                    print_ok("script validated clean")
+                offer_save(script, fname)
+
+        rule()
+
+
+# ── One-shot ask (no curses) ──────────────────────────────────────────────────
+
+def _oneshot(query):
+    """Single-turn query with the same search/entity detection as the TUI."""
+    msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+    user_content = query
+
+    # Writing/editing tasks never need a web search
+    had_search = False
+    if not _is_writing_task(query) and (needs_search(query) or needs_entity_search(query)):
+        print("  ○  searching…", end="\r", flush=True)
+        results, sources = web_search(query)
+        print("                ", end="\r", flush=True)
+        if results:
+            had_search = True
+            user_content = (
+                f"Web search results for '{query}':\n\n{results}\n\n"
+                f"Using ONLY these results, answer: {query}\n"
+                f"Answer naturally — do not cite source numbers inline. Sources are stored separately."
+            )
+
+    if _is_writing_task(query):
+        user_content += (
+            "\n\n[WRITING TASK RULES — follow exactly:\n"
+            "1. Genuinely rewrite — a real paraphrase, not just a minor tweak or single-word change.\n"
+            "2. Make it professional and concise.\n"
+            "3. If 2-3 meaningfully different versions are possible, present them as numbered options.\n"
+            "4. Output ONLY the rewrite(s). No preamble, no explanation, no commentary.]"
+        )
+
+    msgs.append({"role": "user", "content": user_content})
+    _, _ = ask(msgs, DEFAULT_MODEL, strip_phantom_cites=not had_search)
+    print()
+
+
+# ── HTTP serve mode ───────────────────────────────────────────────────────────
+
+def _serve(port=8765):
+    """
+    Lightweight HTTP API server for headless / scripted access to platy.
+    Runs the same search + AI pipeline as the TUI.
+
+    POST /ask   body: plain-text query  OR  JSON {"q": "..."}
+    GET  /ask?q=your+query
+    GET  /health  →  200 OK
+
+    Bind is 0.0.0.0 — intended for trusted LAN use only.
+    """
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import urlparse, parse_qs
+
+    def _run_query(query):
+        """Run full search + AI pipeline. Returns (response_text, sources)."""
+        msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+        user_content = query
+        had_search   = False
+        sources      = []
+
+        if not _is_writing_task(query) and (needs_search(query) or needs_entity_search(query)):
+            results, sources = web_search(query)
+            if results:
+                had_search   = True
+                user_content = (
+                    f"Web search results for '{query}':\n\n{results}\n\n"
+                    f"Using ONLY these results, answer: {query}\n"
+                    f"IMPORTANT: Each result above is prefixed [N]. "
+                    f"Answer naturally — do not cite source numbers inline. Sources are stored separately."
+                )
+
+        if _is_writing_task(query):
+            user_content += ("\n\n[IMPORTANT: Return ONLY the rewritten/corrected text. "
+                             "No preamble, no explanation, no commentary. Just the text itself.]")
+
+        msgs.append({"role": "user", "content": user_content})
+        _, cleaned = ask(msgs, DEFAULT_MODEL, silent=True,
+                         strip_phantom_cites=not had_search)
+        return cleaned, sources
+
+    def _format_response(text, sources):
+        out = text
+        if sources:
+            out += "\n\nsources:\n"
+            for i, (title, url) in enumerate(sources, 1):
+                out += f"[{i}] {title}\n    {url}\n"
+        return out + "\n"
+
+    class _Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            ts = __import__("datetime").datetime.now().strftime("%H:%M:%S")
+            addr = self.address_string()
+            print(f"  {ts}  {addr}  {fmt % args}")
+
+        def _send(self, text, status=200):
+            encoded = text.encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
+
+        def do_GET(self):
+            parsed = urlparse(self.path)
+            if parsed.path in ("/", "/health"):
+                self._send("platy OK\n")
+                return
+            if parsed.path == "/ask":
+                params = parse_qs(parsed.query)
+                query  = ((params.get("q") or params.get("query") or [""])[0]).strip()
+                if not query:
+                    self._send("missing query — use ?q=your+question\n", 400)
+                    return
+                response, sources = _run_query(query)
+                self._send(_format_response(response, sources))
+            else:
+                self._send("not found\n", 404)
+
+        def do_POST(self):
+            if self.path not in ("/", "/ask"):
+                self._send("not found\n", 404)
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            body   = self.rfile.read(length).decode("utf-8").strip()
+            try:
+                data  = json.loads(body)
+                query = (data.get("q") or data.get("query") or "").strip()
+            except (json.JSONDecodeError, AttributeError):
+                query = body
+            if not query:
+                self._send("missing query\n", 400)
+                return
+            response, sources = _run_query(query)
+            self._send(_format_response(response, sources))
+
+    try:
+        server = HTTPServer(("", port), _Handler)
+    except OSError as e:
+        print(f"  ✗  cannot bind to port {port}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"  ●  platy serving on http://0.0.0.0:{port}")
+    print(f"     POST /ask   body: plain-text query  or  {{\"q\": \"...\"}}")
+    print(f"     GET  /ask?q=your+query")
+    print(f"     ⚠   LAN-only — no authentication")
+    print(f"     Ctrl+C to stop")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n  ○  stopped")
+        server.server_close()
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+def main():
+    args = sys.argv[1:]
+
+    if args and args[0] == "--serve":
+        port = 8765
+        if len(args) > 1:
+            try:
+                port = int(args[1])
+            except ValueError:
+                print(f"  ✗  invalid port: {args[1]}", file=sys.stderr)
+                sys.exit(1)
+        _serve(port)
+        return
+
+    if args:
+        _oneshot(" ".join(args))
+        return
+
+    try:
+        curses.wrapper(_tui_main)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Disable bracketed paste mode so the terminal is clean after exit
+        sys.stdout.write("\x1b[?2004l")
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    main()
