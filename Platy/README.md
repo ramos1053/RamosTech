@@ -1,4 +1,10 @@
-# Platy
+```
+██████  ██         ██     ████████  ██    ██         .--..-'''-''''-._
+██  ██  ██        ████       ██     ██    ██     ___/%   ) )      \ i-;;,_
+██████  ██      ████████     ██       ████      (:___/--/ /--------\ ) `'-'
+██      ██      ██    ██     ██        ██            ""          ""
+██      ██████  ██    ██     ██        ██
+```
 
 A local AI terminal console. Runs models on your machine via Ollama. No cloud required by default. Optional Claude API integration for tasks that need a more capable model.
 
