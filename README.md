@@ -1,40 +1,19 @@
 # RamosTech
 
-Welcome to my corner of GitHub. Most of what you’ll find here are projects that explore code, methods, and the quirks of macOS. Some of these tools may be useful in practice, but many are experiments—ways to test boundaries, uncover limitations, and refine approaches to automation and system management.
-
-## About Me
-
-I work primarily in the Apple ecosystem, with a focus on scripting, automation, and enterprise workflows. My background includes:
-- Building reusable diagnostic scripts and automation for macOS environments
-- Exploring secure workflow design, encryption, and device management
-- Experimenting with GMRS radio programming and other technical hobbies
-- Writing clear, audience‑focused documentation to make complex systems approachable
-
-I approach projects as opportunities to learn, test, and share. This space reflects curiosity more than polished products.
+macOS tools, iOS apps, and utilities I've built over the years. Most are things I needed that didn't exist, or existed poorly.
 
 ## Projects
 
-| Project | Platform | Description |
-|---------|----------|-------------|
-| [**GottaGo**](GottaGo/README.md) | iOS | Worldwide public restroom finder — live data from 4 APIs, interactive map, favorites, walking routes |
-| **Nimbus-Swift** | macOS | Canto Cumulus server tool |
-| **PIP** | macOS | Programming focused text editor |
-| **Restless** | macOS | Stay Awake and app caffeinate tool |
-| **Snipster** | macOS | Code snippet manager |
-| **Time Machine Manager** | macOS | Time Machine backup utility |
+| Project | Platform | What it does |
+|---|---|---|
+| [GottaGo](GottaGo/README.md) | iOS | Public restroom finder. Pulls live data from four databases simultaneously — OpenStreetMap, Refuge Restrooms, Great British Toilet Map, and the Australian National Toilet Map. One-tap walking directions. |
+| [Nimbus-Swift](Nimbus-Swift/README.md) | macOS | Full Swift rewrite of Nimbus, a Canto Cumulus server management tool originally built in AppleScript in 2003. |
+| [PIP](PIP/README.md) | macOS | Text editor built for bash scripting and multi-language development. Piece table architecture, async parsing, handles large files without choking. |
+| [Platy](Platy/README.md) | macOS | Local AI terminal console. Runs models through Ollama — no cloud, no account required. Optional Claude API fallback for heavier tasks. |
+| [Restless](Restless/README.md) | macOS | Menu bar app that keeps your Mac awake. Prevents sleep and screen lock, with duration and scheduled modes. No third-party dependencies. |
+| [Snipster](Snipster/README.md) | macOS | Menu bar snippet manager with keyboard triggers and a Spotlight-style quick-access window. |
+| [Time Machine Manager](Time%20Machine%20Manager/README.md) | macOS | Native SwiftUI interface for browsing and managing Time Machine local snapshots. |
 
-Other things you’ll find here:
-- **Exploratory scripts**: Bash, Swift, and Python snippets that probe macOS behaviors or streamline admin tasks.
-- **Automation experiments**: Workflows that integrate with tools like Jamf Pro, SentinelOne, or clipboard managers.
-- **Text utilities**: Methods for cleaning, formatting, and standardizing documentation.
-- **Conceptual prototypes**: Early scaffolds for larger ideas, like plugin systems or orchestration layers.
+## Stack
 
-## Philosophy
-
-- **Clarity first**: Code and documentation should be understandable by others (and my future self).
-- **Experimentation matters**: Even half‑finished ideas can reveal valuable insights.
-- **Transparency**: Sharing both successes and limitations helps others learn alongside me.
-
-## Closing Note
-
-If you find something here useful, that’s great. If not, I hope it at least sparks an idea or helps you avoid a pitfall I’ve already stumbled into. These projects are a record of exploration, and I’m glad to share them.
+Most of the macOS and iOS work is Swift. Platy is Python. Scripts are Bash.
