@@ -1,16 +1,16 @@
 # PIP
 
-Text editor for macOS built around bash scripting and multi-language development. Handles large files without choking, runs scripts inline, and doesn't get in your way.
+Text editor for macOS built around bash scripting and multi-language development. Handles large files, runs scripts inline, syntax highlighting, auto-completion.
 
 **Requires:** macOS 14.0 · Xcode 15.4+ · Swift 5.9+
 
 ---
 
-## What makes it different
+## Under the hood
 
 The text engine uses a piece table — same approach as VSCode — so insertion and deletion stay fast regardless of file size. Files up to 100MB+ open without loading everything into memory at once.
 
-Atomic writes mean a crash during save won't corrupt your file. Ever.
+Writes are atomic. A crash during save won't leave you with a corrupted file.
 
 ---
 
