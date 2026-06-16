@@ -2,7 +2,7 @@
 //  FileStorageManager.swift
 //  Snipster
 //
-//  Created by RamosTech on 12/16/25.
+//  Created by Alan Ramos on 12/16/25.
 //
 
 import Foundation
@@ -12,6 +12,11 @@ actor FileStorageManager {
     private let tagsFileName = "tags.json"
     private var storageLocation: StorageLocation
     private var customPath: URL?
+
+    /// Maximum size (bytes) for a snippets/tags JSON file we are willing to read into memory.
+    /// Guards against memory-exhaustion from a maliciously large or corrupt file. 50 MB is far
+    /// beyond any realistic snippet library.
+    static let maxFileSize: Int = 50 * 1024 * 1024
 
     private var fileURL: URL? {
         if let customPath = customPath {
@@ -45,7 +50,7 @@ actor FileStorageManager {
             return []
         }
 
-        let data = try Data(contentsOf: fileURL)
+        let data = try readData(at: fileURL)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
@@ -65,6 +70,7 @@ actor FileStorageManager {
 
         let data = try encoder.encode(snippets)
         try data.write(to: fileURL, options: .atomic)
+        setOwnerOnlyPermissions(at: fileURL)
     }
 
     func loadTags() async throws -> [Tag] {
@@ -80,7 +86,7 @@ actor FileStorageManager {
             return []
         }
 
-        let data = try Data(contentsOf: tagsFileURL)
+        let data = try readData(at: tagsFileURL)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
@@ -100,6 +106,7 @@ actor FileStorageManager {
 
         let data = try encoder.encode(tags)
         try data.write(to: tagsFileURL, options: .atomic)
+        setOwnerOnlyPermissions(at: tagsFileURL)
     }
 
     func updateStorageLocation(_ location: StorageLocation, customPath: URL? = nil) async {
@@ -126,9 +133,35 @@ actor FileStorageManager {
     private func createDirectoryIfNeeded(for fileURL: URL) throws {
         let directory = fileURL.deletingLastPathComponent()
         if !FileManager.default.fileExists(atPath: directory.path) {
-            try FileManager.default.createDirectory(at: directory,
-                                                   withIntermediateDirectories: true)
+            // Create the directory owner-only (0700). Snippet content is potentially
+            // sensitive (passwords, tokens, personal data), so other local users must
+            // not be able to traverse into or read the Snipster storage directory.
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
         }
+    }
+
+    /// Read a file's contents, refusing to load anything larger than `maxFileSize`.
+    /// This prevents a maliciously crafted (or corrupt) storage/import file from
+    /// exhausting memory before JSON decoding even begins.
+    private func readData(at url: URL) throws -> Data {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        if let size = attributes[.size] as? Int, size > Self.maxFileSize {
+            throw FileStorageError.fileTooLarge
+        }
+        return try Data(contentsOf: url, options: .mappedIfSafe)
+    }
+
+    /// Restrict a freshly written file to owner read/write only (0600). Snippet and tag
+    /// data may contain sensitive content and should never be world- or group-readable.
+    private func setOwnerOnlyPermissions(at url: URL) {
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: url.path
+        )
     }
 }
 
@@ -137,6 +170,7 @@ enum FileStorageError: LocalizedError {
     case accessDenied
     case encodingFailed
     case decodingFailed
+    case fileTooLarge
 
     var errorDescription: String? {
         switch self {
@@ -148,6 +182,8 @@ enum FileStorageError: LocalizedError {
             return "Failed to encode snippets"
         case .decodingFailed:
             return "Failed to decode snippets"
+        case .fileTooLarge:
+            return "Storage file is too large to read safely"
         }
     }
 }

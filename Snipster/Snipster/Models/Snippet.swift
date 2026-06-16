@@ -2,7 +2,7 @@
 //  Snippet.swift
 //  Snipster
 //
-//  Created by RamosTech on 12/16/25.
+//  Created by Alan Ramos on 12/16/25.
 //
 
 import Foundation
@@ -145,6 +145,32 @@ struct Snippet: Identifiable, Codable, Equatable, Sendable {
     mutating func incrementUsage() {
         usageCount += 1
         lastUsedAt = Date()
+    }
+
+    // MARK: - Sanitization
+
+    /// Upper bounds applied to untrusted (imported) snippet fields. These are generous
+    /// relative to real usage but prevent a malicious/corrupt file from injecting
+    /// multi-megabyte strings or runaway triggers.
+    enum Limits {
+        static let maxTitle = 1_000
+        static let maxContent = 100_000
+        static let maxTrigger = 100
+        static let maxTags = 100
+        static let maxTagName = 200
+    }
+
+    /// Returns a copy with all free-text fields clamped to safe lengths. Used when
+    /// importing snippets from an untrusted JSON file.
+    func sanitized() -> Snippet {
+        var copy = self
+        copy.title = String(title.prefix(Limits.maxTitle))
+        copy.content = String(content.prefix(Limits.maxContent))
+        copy.triggerPrefix = String(triggerPrefix.prefix(Limits.maxTrigger))
+        copy.triggerSequence = String(triggerSequence.prefix(Limits.maxTrigger))
+        copy.tags = tags.prefix(Limits.maxTags).map { String($0.prefix(Limits.maxTagName)) }
+        copy.tagIDs = Array(tagIDs.prefix(Limits.maxTags))
+        return copy
     }
 
     func duplicate() -> Snippet {

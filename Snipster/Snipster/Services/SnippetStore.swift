@@ -2,7 +2,7 @@
 //  SnippetStore.swift
 //  Snipster
 //
-//  Created by RamosTech on 12/16/25.
+//  Created by Alan Ramos on 12/16/25.
 //
 
 import Foundation
@@ -77,11 +77,21 @@ class SnippetStore: ObservableObject {
     }
 
     func importSnippets(from url: URL, mode: ImportMode) async throws -> ImportResult {
-        let data = try Data(contentsOf: url)
+        // Refuse to read an oversized import file into memory. The picker allows arbitrary
+        // user-supplied JSON, so this is untrusted input and must be bounded.
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        if let size = attributes[.size] as? Int, size > FileStorageManager.maxFileSize {
+            throw SnippetError.importFailed(FileStorageError.fileTooLarge)
+        }
+
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
+        // Sanitize every imported snippet: clamp field lengths so a crafted file cannot
+        // create pathological triggers/content that would degrade matching or the UI.
         let importedSnippets = try decoder.decode([Snippet].self, from: data)
+            .map { $0.sanitized() }
 
         var added = 0
         var updated = 0
