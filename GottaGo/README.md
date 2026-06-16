@@ -1,49 +1,38 @@
 # GottaGo
 
-A worldwide public restroom finder for **iOS**.
+Public restroom finder for iPhone and iPad. Built it because every app I tried only knew about dedicated restrooms. GottaGo also pulls from gas stations, hotels, restaurants, parks, malls, and airports — anywhere that has a toilet on the premises. Four live databases, one search, one-tap walking directions.
 
-Find any restroom anywhere on Earth in seconds. GottaGo queries four live databases simultaneously (OpenStreetMap, Refuge Restrooms, Great British Toilet Map, and the Australian National Toilet Map), surfaces restrooms at gas stations, hotels, restaurants, parks, and more, and gets you there with one-tap walking directions.
-
----
-
-## Platform
-
-| Platform | Folder | Stack |
-|----------|--------|-------|
-| **iOS** (iPhone / iPad) | [`iOS/`](iOS/README.md) | Swift · SwiftUI · MapKit · CoreLocation |
-
----
-
-## Features at a Glance
-
-- Interactive map (Standard / Satellite / Hybrid) with color-coded pins
-- Restrooms at dedicated facilities **and** at venues — gas stations, hotels, restaurants, parks, malls, airports, and more
-- Filter by **Free**, **Accessible**, and **Gender Neutral**
-- Full-text search by name, address, or notes
-- Add your own entries — optionally submit to the Refuge Restrooms community database
-- Favorite restrooms with one-tap walking navigation
-- Reviews with overall + cleanliness ratings
-- iCloud backup
+**Stack:** Swift · SwiftUI · MapKit · CoreLocation
 
 ---
 
 ## Data Sources
 
 | Source | Coverage |
-|--------|----------|
-| [OpenStreetMap / Overpass](https://www.openstreetmap.org) | Global — dedicated toilets + venue toilets (`toilets=yes`) |
+|---|---|
+| [OpenStreetMap / Overpass](https://www.openstreetmap.org) | Global — dedicated facilities and venues with toilets |
 | [Refuge Restrooms](https://www.refugerestrooms.org) | Global — gender-neutral and accessible focus |
-| [Great British Toilet Map](https://www.toiletmap.org.uk) | United Kingdom — 14,000+ facilities |
+| [Great British Toilet Map](https://www.toiletmap.org.uk) | UK — 14,000+ facilities |
 | [Australia National Toilet Map](https://www.toiletmap.gov.au) | Australia — 17,000+ government-verified |
 
 ---
 
-## Quick Start
+## Features
 
-See [`iOS/README.md`](iOS/README.md) for Xcode build and sideload instructions.
+- Interactive map (Standard / Satellite / Hybrid) with color-coded pins
+- Filters: Free, Accessible, Gender Neutral
+- Full-text search by name, address, or notes
+- Add your own entries and optionally submit to Refuge Restrooms
+- Favorites with one-tap walking navigation
+- Reviews with overall and cleanliness ratings
+- iCloud backup
 
 ---
 
-## License
+## Build
 
-[LICENSE](../LICENSE) — repository root
+See [`iOS/README.md`](iOS/README.md) for Xcode setup and sideload instructions.
+
+---
+
+[LICENSE](../LICENSE)
