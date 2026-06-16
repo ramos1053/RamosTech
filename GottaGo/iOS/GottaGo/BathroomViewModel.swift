@@ -293,14 +293,15 @@ class BathroomViewModel: NSObject, ObservableObject {
         isFetchingExternal  = true
         lastFetchLocation   = coord
 
-        // Fire all four sources simultaneously
+        // Fire all sources simultaneously
         async let overpassFetch  = ToiletDataService.fetchOverpassToilets(near: coord)
         async let refugeFetch    = ToiletDataService.fetchRefugeRestrooms(near: coord)
         async let gbptmFetch     = ToiletDataService.fetchGBPTM(near: coord)
         async let australiaFetch = ToiletDataService.fetchAustraliaToilets(near: coord)
+        async let wheelmapFetch  = ToiletDataService.fetchWheelmapToilets(near: coord)
 
-        let (overpassResults, refugeResults, gbptmResults, australiaResults) =
-            await (overpassFetch, refugeFetch, gbptmFetch, australiaFetch)
+        let (overpassResults, refugeResults, gbptmResults, australiaResults, wheelmapResults) =
+            await (overpassFetch, refugeFetch, gbptmFetch, australiaFetch, wheelmapFetch)
 
         // Deduplicate by proximity: keep UUID-stable entries, skip co-located duplicates
         var merged = overpassResults
@@ -309,7 +310,7 @@ class BathroomViewModel: NSObject, ObservableObject {
         }
         var seenKeys = Set(merged.map { key($0) })
 
-        for batch in [refugeResults, gbptmResults, australiaResults] {
+        for batch in [refugeResults, gbptmResults, australiaResults, wheelmapResults] {
             for entry in batch {
                 let k = key(entry)
                 if !seenKeys.contains(k) {
@@ -333,6 +334,50 @@ class BathroomViewModel: NSObject, ObservableObject {
         guard let index = bathrooms.firstIndex(where: { $0.id == bathroomId }) else { return }
         bathrooms[index].reviews.append(review)
         saveBathrooms()
+    }
+
+    /// Moves an external (API-sourced) bathroom into local storage so reviews persist.
+    /// No-op if already in local storage.
+    func adoptExternalBathroom(_ bathroom: Bathroom) {
+        guard !bathrooms.contains(where: { $0.id == bathroom.id }) else { return }
+        bathrooms.append(bathroom)
+        saveBathrooms()
+    }
+
+    /// Adds a review to any bathroom — adopts it into local storage first if it came from an API source.
+    func addReviewToAnyBathroom(_ review: Review, to bathroom: Bathroom) {
+        adoptExternalBathroom(bathroom)
+        addReview(review, to: bathroom.id)
+    }
+
+    /// Sends an upvote or downvote to Refuge Restrooms for entries that originated from that source.
+    /// Silently does nothing if the bathroom is not a Refuge entry.
+    func rateOnRefuge(_ bathroom: Bathroom, upvote: Bool) {
+        // Refuge UUIDs are built with prefix "52465547-0000-4000-8000-" + 12-char hex of the Refuge ID
+        let prefix = "52465547-0000-4000-8000-"
+        let uuidStr = bathroom.id.uuidString.uppercased()
+        guard uuidStr.hasPrefix(prefix.uppercased()) else { return }
+        let hexPart = String(uuidStr.suffix(12))
+        guard let refugeID = Int(hexPart, radix: 16), refugeID > 0 else { return }
+        Task {
+            _ = await ToiletDataService.rateRefugeRestroom(refugeID: refugeID, upvote: upvote)
+        }
+    }
+
+    /// Submits a bathroom to Refuge Restrooms (community database).
+    /// Returns true on success.
+    @discardableResult
+    func submitNewBathroomToRefuge(_ bathroom: Bathroom) async -> Bool {
+        await ToiletDataService.submitToRefugeRestrooms(bathroom)
+    }
+
+    // MARK: - Photos
+
+    /// Fetches nearby Mapillary street-level photos for the given bathroom.
+    /// Returns [] immediately if no Mapillary key is configured.
+    func loadPhotos(for bathroom: Bathroom) async -> [URL] {
+        let coord = CLLocationCoordinate2D(latitude: bathroom.latitude, longitude: bathroom.longitude)
+        return await ToiletDataService.fetchMapillaryPhotos(near: coord)
     }
 
     func deleteBathroom(_ bathroom: Bathroom) {
