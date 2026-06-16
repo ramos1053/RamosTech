@@ -2,7 +2,7 @@
 //  SnippetVariableProcessor.swift
 //  Snipster
 //
-//  Created by RamosTech on 12/18/25.
+//  Created by Alan Ramos on 12/18/25.
 //
 
 import Foundation
@@ -10,6 +10,15 @@ import AppKit
 
 nonisolated final class SnippetVariableProcessor: Sendable {
     static let shared = SnippetVariableProcessor()
+
+    /// Maximum length of clipboard content that may be substituted into a single
+    /// `{{CLIPBOARD}}` token. Caps the blast radius of a snippet that references the
+    /// clipboard many times while the clipboard holds a very large payload.
+    private static let maxClipboardLength = 100_000
+
+    /// Hard cap on the fully-expanded output. Together with the clipboard cap this
+    /// bounds total memory/typing work regardless of how the snippet is constructed.
+    private static let maxOutputLength = 1_000_000
 
     private init() {}
 
@@ -22,6 +31,11 @@ nonisolated final class SnippetVariableProcessor: Sendable {
         processed = processTimeVariables(processed)
         processed = processClipboardVariables(processed)
         processed = processSystemVariables(processed)
+
+        // Defensively bound the expanded result.
+        if processed.count > Self.maxOutputLength {
+            processed = String(processed.prefix(Self.maxOutputLength))
+        }
 
         return processed
     }
@@ -130,9 +144,13 @@ nonisolated final class SnippetVariableProcessor: Sendable {
     private func processClipboardVariables(_ content: String) -> String {
         var result = content
 
-        // {{CLIPBOARD}} - Insert clipboard content
+        // {{CLIPBOARD}} - Insert clipboard content.
+        // Clamp the substituted value: clipboard content is fully untrusted and may be
+        // arbitrarily large. Without a cap, a snippet containing several {{CLIPBOARD}}
+        // tokens could explode into an enormous string.
         if let clipboardContent = NSPasteboard.general.string(forType: .string) {
-            result = result.replacingOccurrences(of: "{{CLIPBOARD}}", with: clipboardContent)
+            let bounded = String(clipboardContent.prefix(Self.maxClipboardLength))
+            result = result.replacingOccurrences(of: "{{CLIPBOARD}}", with: bounded)
         }
 
         return result
