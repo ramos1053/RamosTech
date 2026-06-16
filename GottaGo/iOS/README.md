@@ -14,17 +14,23 @@
 - **Walking route overlay** with a live card showing ETA, distance (metric), and estimated calories burned
 - **"Locate Me"** button re-centers the map on your current position instantly
 
-### Live Worldwide Data (4 APIs, fired simultaneously)
+### Live Worldwide Data (up to 5 sources, fired simultaneously)
 | Source | Coverage | Notes |
 |--------|----------|-------|
 | **OpenStreetMap / Overpass** | Global | Dedicated `amenity=toilets` nodes/ways **+** any venue tagged `toilets=yes` (gas stations, hotels, restaurants, parks, stores, airports…) |
 | **Refuge Restrooms** | Global | Community-curated gender-neutral and accessible restrooms |
-| **Great British Toilet Map** | United Kingdom | 14,000+ gov-verified UK loos via GraphQL |
-| **Australia National Toilet Map** | Australia | 17,000+ government-verified facilities |
+| **Great British Toilet Map** | United Kingdom | 14,000+ UK facilities via GraphQL |
+| **Australia National Toilet Map** | Australia | 17,000+ government-verified facilities via ArcGIS |
+| **Wheelmap** *(optional)* | Global | Wheelchair-accessible restrooms — strong North America coverage. Requires free API key from [wheelmap.org/api](https://wheelmap.org/api). Set `wheelmapAPIKey` in `ToiletDataService.swift` before building. |
 
 - Results are **proximity-deduplicated** so overlapping sources never show the same toilet twice
 - A spinner in the Home header shows when a background refresh is running
 - Re-fetches automatically when you move more than 1 km from the last query point
+
+### Photos *(optional)*
+- A horizontal photo strip appears on the detail screen showing **Mapillary street-level imagery** near each facility (entrance and exterior shots)
+- Get a free access token at [mapillary.com/developer](https://www.mapillary.com/developer) and set `mapillaryAccessToken` in `ToiletDataService.swift`
+- Leave it empty and the photo strip is hidden — no impact on anything else
 
 ### Filtering
 Three one-tap filter chips (Home + Map + List tabs):
@@ -35,13 +41,20 @@ Three one-tap filter chips (Home + Map + List tabs):
 ### Bathroom Detail Sheet
 Tap any pin or row to open a detail sheet containing:
 - **Mini map** centered on the facility
+- **Photo strip** — nearby Mapillary street-level imagery (if API key configured)
 - **Info grid**: cost, hours, wheelchair access, gender-neutral status
 - **Banners** for purchase-required and access-code entries
 - **Average rating and cleanliness scores** (1–5 toilet icons, color-graded)
 - **"Directions"** button — opens Apple Maps with walking directions
 - **"Route"** button — draws a walking polyline on the in-app map
 - **Reviews** section with full review history
-- **Write a Review** — overall rating + cleanliness rating (1–5 toilet icons) + comment
+- **Write a Review** — works on any bathroom, including ones pulled from the live APIs
+
+### Reviews
+- Review any restroom — locally-added entries or anything fetched from the live databases
+- Overall rating + cleanliness rating (1–5 toilet icons) + freeform comment
+- For Refuge Restrooms entries, reviews also send an upvote/downvote to their API
+- Reviews on API-sourced bathrooms are saved locally and persist across launches
 
 ### Favorites
 - **Heart** any restroom from its detail sheet — appears immediately in the Favorites tab
@@ -81,6 +94,17 @@ Tap any pin or row to open a detail sheet containing:
 | Swift | 5.9+ |
 | Apple Developer account | Free (Personal Team) — iCloud sync requires paid account |
 
+### Optional API Keys
+
+All optional. The app works without any of these — they unlock additional data layers.
+
+| Key | Where to get it | What it enables |
+|-----|-----------------|-----------------|
+| `wheelmapAPIKey` | [wheelmap.org/api](https://wheelmap.org/api) | 5th database — accessible restrooms globally |
+| `mapillaryAccessToken` | [mapillary.com/developer](https://www.mapillary.com/developer) | Street-level photo strip on detail screens |
+
+Set them as string constants at the top of `ToiletDataService.swift` before building.
+
 ---
 
 ## Building from Source
@@ -95,7 +119,7 @@ cd RamosTech
 ### 2. Open in Xcode
 
 ```bash
-open GottaGo.xcodeproj
+open GottaGo/iOS/GottaGo.xcodeproj
 ```
 
 ### 3. Select your team
@@ -174,6 +198,8 @@ If you don't have a Mac, you can sideload a pre-built `.ipa` using one of these 
 - **Refuge Restrooms** — [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 - **Great British Toilet Map** — [Open Government Licence](https://www.nationalarchives.gov.uk/doc/open-government-licence/)
 - **Australian National Toilet Map** — [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/)
+- **Wheelmap** — [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (uses OSM data)
+- **Mapillary** — imagery © Mapillary contributors, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 
 ---
 
