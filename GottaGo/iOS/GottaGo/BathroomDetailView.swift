@@ -107,6 +107,8 @@ struct BathroomDetailView: View {
     @State private var showAddReview = false
     @State private var showDeleteConfirm = false
     @State private var miniMapPosition: MapCameraPosition
+    @State private var photos: [URL] = []
+    @State private var isLoadingPhotos = false
 
     init(bathroom: Bathroom) {
         self.bathroom = bathroom
@@ -148,6 +150,44 @@ struct BathroomDetailView: View {
                     .frame(height: 190)
                     .disabled(true)
                     .allowsHitTesting(false)
+
+                    // MARK: Photo Strip (Mapillary nearby imagery)
+                    if !photos.isEmpty || isLoadingPhotos {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                if isLoadingPhotos && photos.isEmpty {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(.secondarySystemBackground))
+                                        .frame(width: 200, height: 130)
+                                        .overlay(ProgressView())
+                                }
+                                ForEach(Array(photos.enumerated()), id: \.offset) { _, url in
+                                    AsyncImage(url: url) { phase in
+                                        switch phase {
+                                        case .success(let image):
+                                            image
+                                                .resizable()
+                                                .scaledToFill()
+                                        case .empty:
+                                            Color(.secondarySystemBackground)
+                                                .overlay(ProgressView())
+                                        case .failure:
+                                            Color(.secondarySystemBackground)
+                                                .overlay(Image(systemName: "photo.slash")
+                                                    .foregroundStyle(.secondary))
+                                        @unknown default:
+                                            EmptyView()
+                                        }
+                                    }
+                                    .frame(width: 200, height: 130)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                        .frame(height: 130)
+                        .padding(.vertical, 8)
+                    }
 
                     VStack(alignment: .leading, spacing: 18) {
 
@@ -341,7 +381,12 @@ struct BathroomDetailView: View {
                 Text("This will permanently remove this restroom from your list.")
             }
             .sheet(isPresented: $showAddReview) {
-                AddReviewView(bathroomId: bathroom.id)
+                AddReviewView(bathroom: bathroom)
+            }
+            .task {
+                isLoadingPhotos = true
+                photos = await viewModel.loadPhotos(for: bathroom)
+                isLoadingPhotos = false
             }
         }
     }
@@ -432,7 +477,7 @@ struct ReviewRowView: View {
 struct AddReviewView: View {
     @EnvironmentObject var viewModel: BathroomViewModel
     @Environment(\.dismiss) private var dismiss
-    let bathroomId: UUID
+    let bathroom: Bathroom
 
     @State private var authorName  = ""
     @State private var rating      = 3.0
@@ -476,7 +521,7 @@ struct AddReviewView: View {
                             comment: comment,
                             date: Date()
                         )
-                        viewModel.addReview(review, to: bathroomId)
+                        viewModel.addReviewToAnyBathroom(review, to: bathroom)
                         dismiss()
                     }
                     .fontWeight(.semibold)
