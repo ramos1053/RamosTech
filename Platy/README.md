@@ -32,13 +32,13 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ### 2. Pull a model
 
-Platy works with any model Ollama supports. A solid starting point:
+Platy works with any model Ollama supports. Good general-purpose choice:
 
 ```sh
 ollama pull qwen2.5:14b
 ```
 
-Lighter option if you need less RAM:
+Smaller, faster, uses less RAM:
 
 ```sh
 ollama pull phi3
@@ -50,7 +50,7 @@ You can pull as many models as you want and switch between them inside Platy wit
 
 ```sh
 mkdir -p ~/bin
-curl -o ~/bin/platy https://raw.githubusercontent.com/alanramos/platy/main/platy
+curl -o ~/bin/platy https://raw.githubusercontent.com/ramos1053/RamosTech/main/Platy/platy
 chmod +x ~/bin/platy
 ```
 
