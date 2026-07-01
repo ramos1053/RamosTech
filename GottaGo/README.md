@@ -1,43 +1,33 @@
 # GottaGo
 
-Public restroom finder for iPhone and iPad. Built it because every app I tried only knew about dedicated restrooms. GottaGo also pulls from gas stations, hotels, restaurants, parks, malls, and airports — anywhere that has a toilet on the premises. Up to five live databases, one search, one-tap walking directions.
+A worldwide public restroom finder for iOS. GottaGo queries multiple live databases at once — OpenStreetMap, Refuge Restrooms, the Great British Toilet Map, the Australian National Toilet Map, and optionally Wheelmap — and surfaces restrooms at gas stations, hotels, restaurants, parks, and anywhere else that has one, then gets you there with one-tap walking directions.
 
-**Stack:** Swift · SwiftUI · MapKit · CoreLocation
+## Platform
 
----
+| Platform | Folder | Stack |
+|----------|--------|-------|
+| iOS (iPhone / iPad) | [`iOS/`](iOS/README.md) | Swift, SwiftUI, MapKit, CoreLocation |
 
-## Data Sources
+## What it does
+
+The map view switches between Standard, Satellite, and Hybrid, with color-coded pins so you can tell at a glance which restrooms are free, paid, or unverified. You can filter by Free, Accessible, or Gender Neutral, search by name or address, and add your own entries — optionally contributing them back to the Refuge Restrooms community database. If you set a Mapillary API key, the detail sheet also shows nearby street-level photos. You can review any restroom, including ones pulled from the live databases — for Refuge Restrooms entries, a review also sends an upvote or downvote to their API. Favorites get one-tap navigation, and everything backs up to iCloud.
+
+## Data sources
 
 | Source | Coverage |
-|---|---|
-| [OpenStreetMap / Overpass](https://www.openstreetmap.org) | Global — dedicated facilities and venues with toilets |
-| [Refuge Restrooms](https://www.refugerestrooms.org) | Global — gender-neutral and accessible focus |
+|--------|----------|
+| [OpenStreetMap / Overpass](https://www.openstreetmap.org) | Global — dedicated toilets and venues tagged `toilets=yes` |
+| [Refuge Restrooms](https://www.refugerestrooms.org) | Global, gender-neutral and accessible focus |
 | [Great British Toilet Map](https://www.toiletmap.org.uk) | UK — 14,000+ facilities |
-| [Australia NTM](https://www.toiletmap.gov.au) | Australia — 17,000+ government-verified |
-| [Wheelmap](https://wheelmap.org) *(optional)* | Global — wheelchair-accessible restrooms; strong North America coverage |
+| [Australia National Toilet Map](https://www.toiletmap.gov.au) | Australia — 17,000+ government-verified |
+| [Wheelmap](https://wheelmap.org) (optional) | Global, strong North America coverage — wheelchair-accessible restrooms |
 
-Wheelmap requires a free API key from [wheelmap.org/api](https://wheelmap.org/api). Set it in `ToiletDataService.swift` before building. Leave it empty and it's silently skipped.
+Wheelmap needs a free API key from [wheelmap.org/api](https://wheelmap.org/api), set in `ToiletDataService.swift` before building. Leave it blank and it's silently skipped. Mapillary works the same way with its own [developer token](https://www.mapillary.com/developer).
 
----
+## Getting started
 
-## Features
+See [`iOS/README.md`](iOS/README.md) for the Xcode build and sideloading instructions.
 
-- Interactive map (Standard / Satellite / Hybrid) with color-coded pins
-- Filters: Free, Accessible, Gender Neutral
-- Full-text search by name, address, or notes
-- Street-level photos via [Mapillary](https://www.mapillary.com/developer) *(optional — free API key)*
-- Add your own entries and submit to Refuge Restrooms
-- Review any restroom — your own additions or anything pulled from the live databases
-- Rate Refuge Restrooms entries directly (upvote/downvote sent back to their API)
-- Favorites with one-tap walking navigation
-- iCloud backup
+## License
 
----
-
-## Build
-
-See [`iOS/README.md`](iOS/README.md) for Xcode setup and sideload instructions.
-
----
-
-[LICENSE](../LICENSE)
+See [LICENSE](../LICENSE) at the repository root.
