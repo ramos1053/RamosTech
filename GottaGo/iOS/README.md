@@ -1,89 +1,42 @@
-# GottaGo 🚻
+# GottaGo
 
-**GottaGo** is a free, open-source iOS app that finds public restrooms near you — anywhere in the world. It queries multiple live databases simultaneously, surfaces venue restrooms (gas stations, hotels, restaurants, parks, and more), and lets you build a private favorites list with one-tap walking navigation.
+GottaGo is a free, open-source iOS app for finding public restrooms anywhere in the world. It hits several live databases at once, pulls in restrooms attached to gas stations, hotels, restaurants and parks (not just dedicated public facilities), and lets you build a private favorites list with one-tap walking navigation.
 
----
+## Map and navigation
 
-## Features
+The Home tab has a 300pt map preview; the Map tab gives you the full-screen version, switchable between Standard, Satellite, and Hybrid. Pins are color-coded — green for free, orange for paid, blue for unknown, pink for favorited — and a long press anywhere drops a new pin so you can add a restroom on the spot. Once you pick a destination, a walking route overlay shows ETA, distance, and a rough calorie estimate, and a "Locate Me" button snaps the map back to your position.
 
-### Map & Navigation
-- **Interactive full-screen map** (Map tab) and a windowed 300 pt preview on the Home tab
-- **Three map styles**: Standard, Satellite, and Hybrid — switchable mid-session
-- **Color-coded pins**: green = free, orange = paid, blue = unknown, pink = favorited
-- **Long-press anywhere** on the map to drop a pin and add a new restroom at that exact spot
-- **Walking route overlay** with a live card showing ETA, distance (metric), and estimated calories burned
-- **"Locate Me"** button re-centers the map on your current position instantly
+## Live data, queried simultaneously
 
-### Live Worldwide Data (up to 5 sources, fired simultaneously)
 | Source | Coverage | Notes |
 |--------|----------|-------|
-| **OpenStreetMap / Overpass** | Global | Dedicated `amenity=toilets` nodes/ways **+** any venue tagged `toilets=yes` (gas stations, hotels, restaurants, parks, stores, airports…) |
-| **Refuge Restrooms** | Global | Community-curated gender-neutral and accessible restrooms |
-| **Great British Toilet Map** | United Kingdom | 14,000+ UK facilities via GraphQL |
-| **Australia National Toilet Map** | Australia | 17,000+ government-verified facilities via ArcGIS |
-| **Wheelmap** *(optional)* | Global | Wheelchair-accessible restrooms — strong North America coverage. Requires free API key from [wheelmap.org/api](https://wheelmap.org/api). Set `wheelmapAPIKey` in `ToiletDataService.swift` before building. |
+| OpenStreetMap / Overpass | Global | Dedicated `amenity=toilets` nodes plus any venue tagged `toilets=yes` — gas stations, hotels, restaurants, parks, stores, airports |
+| Refuge Restrooms | Global | Community-curated, gender-neutral and accessible focus |
+| Great British Toilet Map | United Kingdom | 14,000+ government-verified entries via GraphQL |
+| Australia National Toilet Map | Australia | 17,000+ government-verified facilities via ArcGIS |
+| Wheelmap (optional) | Global, strong North America coverage | Wheelchair-accessible restrooms. Needs a free API key from [wheelmap.org/api](https://wheelmap.org/api) — set `wheelmapAPIKey` in `ToiletDataService.swift` before building. |
 
-- Results are **proximity-deduplicated** so overlapping sources never show the same toilet twice
-- A spinner in the Home header shows when a background refresh is running
-- Re-fetches automatically when you move more than 1 km from the last query point
+Results get deduplicated by proximity so overlapping sources don't show the same toilet twice, and the app quietly refreshes in the background whenever you move more than a kilometer from wherever it last queried.
 
-### Photos *(optional)*
-- A horizontal photo strip appears on the detail screen showing **Mapillary street-level imagery** near each facility (entrance and exterior shots)
-- Get a free access token at [mapillary.com/developer](https://www.mapillary.com/developer) and set `mapillaryAccessToken` in `ToiletDataService.swift`
-- Leave it empty and the photo strip is hidden — no impact on anything else
+If you set a [Mapillary](https://www.mapillary.com/developer) access token (`mapillaryAccessToken` in `ToiletDataService.swift`), the detail sheet also shows a horizontal strip of nearby street-level photos. Leave it blank and the photo strip just doesn't appear — nothing else changes.
 
-### Filtering
-Three one-tap filter chips (Home + Map + List tabs):
-- **Free** — hides paid and unknown-cost entries
-- **Accessible** — wheelchair-accessible only
-- **Gender Neutral** — all-gender / unisex only
+## Filtering and detail
 
-### Bathroom Detail Sheet
-Tap any pin or row to open a detail sheet containing:
-- **Mini map** centered on the facility
-- **Photo strip** — nearby Mapillary street-level imagery (if API key configured)
-- **Info grid**: cost, hours, wheelchair access, gender-neutral status
-- **Banners** for purchase-required and access-code entries
-- **Average rating and cleanliness scores** (1–5 toilet icons, color-graded)
-- **"Directions"** button — opens Apple Maps with walking directions
-- **"Route"** button — draws a walking polyline on the in-app map
-- **Reviews** section with full review history
-- **Write a Review** — works on any bathroom, including ones pulled from the live APIs
+Three filter chips — Free, Accessible, Gender Neutral — show up on the Home, Map, and List tabs. Tapping any pin or row opens a detail sheet with a mini map, the Mapillary photo strip (if configured), cost/hours/accessibility info, average rating and cleanliness scores, and buttons for Apple Maps directions or an in-app walking route.
 
-### Reviews
-- Review any restroom — locally-added entries or anything fetched from the live databases
-- Overall rating + cleanliness rating (1–5 toilet icons) + freeform comment
-- For Refuge Restrooms entries, reviews also send an upvote/downvote to their API
-- Reviews on API-sourced bathrooms are saved locally and persist across launches
+You can review any restroom — your own entries or anything pulled from the live databases. A review is an overall rating, a cleanliness rating (both 1–5), and a free-text comment; for Refuge Restrooms entries, submitting a review also sends an upvote or downvote to their API. Reviews on API-sourced bathrooms save locally and persist across launches.
 
-### Favorites
-- **Heart** any restroom from its detail sheet — appears immediately in the Favorites tab
-- **Reorder** favorites by dragging the grip handle
-- **Swipe trailing** to un-favorite; **swipe leading** to permanently delete (own entries only)
-- **One-tap "Route"** button on each favorite row switches to the Map tab and draws the walking route
-- Favorites count badge on the tab icon
+## Favorites and the nearby list
 
-### Nearby List
-- Sorted by distance from your current location
-- **Search bar** — filters by name, address, or notes in real time
-- Filter menu (top-left) mirrors the chip bar
-- Swipe to delete own entries
+Heart a restroom from its detail sheet and it shows up immediately under Favorites, where you can reorder by dragging or swipe to un-favorite (or, for your own entries, delete permanently). Each favorite has its own one-tap route button. The Nearby list sorts everything by distance and has its own search bar and filter menu.
 
-### Adding a Restroom
-- **Category picker**: Public, Restaurant, Hotel, Store, Gas Station, Park, Other
-- **Location**: use your current GPS position _or_ tap "Move Pin" to open a full-screen interactive location picker
-- **Cost**: Free / Paid / Unknown (segmented control)
-- **Toggles**: Wheelchair accessible, Gender-neutral, Purchase required
-- **Access code field** (appears when purchase or paid is selected)
-- **Hours** and free-text **Notes**
-- **Community toggle**: optionally submit to [Refuge Restrooms](https://www.refugerestrooms.org) with live status feedback (Submitting → Success / Failed)
+## Adding a restroom
 
-### Data Management
-- **Local storage**: saved to `UserDefaults` (survives app restarts and updates)
-- **iCloud Key-Value Store**: backup/restore across devices and after a phone wipe *(requires a paid Apple Developer account — see Setup)*
-- **Delete** your own entries: swipe in List/Favorites, or tap the trash icon in the detail sheet (external API entries are read-only)
+Pick a category (public, restaurant, hotel, store, gas station, park, other), set the location using your current GPS position or by dropping a pin manually, mark the cost and any accessibility toggles, and add hours or notes if you want. There's an option to submit the entry to Refuge Restrooms as well, with live feedback on whether that submission succeeded.
 
----
+## Where things are stored
+
+Everything lives in `UserDefaults` locally, so it survives app restarts and updates. If you have a paid Apple Developer account, you can also enable iCloud Key-Value Store sync across devices — see the setup section below. You can delete your own entries at any time; entries pulled from the external APIs are read-only.
 
 ## Requirements
 
@@ -92,129 +45,74 @@ Tap any pin or row to open a detail sheet containing:
 | iOS | 17.0+ |
 | Xcode | 15.0+ |
 | Swift | 5.9+ |
-| Apple Developer account | Free (Personal Team) — iCloud sync requires paid account |
+| Apple Developer account | Free tier works for simulator/personal-device testing; iCloud sync needs a paid account |
 
-### Optional API Keys
+### Optional API keys
 
-All optional. The app works without any of these — they unlock additional data layers.
+Both are optional — the app works fine without either, they just unlock extra data.
 
 | Key | Where to get it | What it enables |
 |-----|-----------------|-----------------|
-| `wheelmapAPIKey` | [wheelmap.org/api](https://wheelmap.org/api) | 5th database — accessible restrooms globally |
-| `mapillaryAccessToken` | [mapillary.com/developer](https://www.mapillary.com/developer) | Street-level photo strip on detail screens |
+| `wheelmapAPIKey` | [wheelmap.org/api](https://wheelmap.org/api) | Wheelmap as a 5th data source |
+| `mapillaryAccessToken` | [mapillary.com/developer](https://www.mapillary.com/developer) | Street-level photo strip on the detail screen |
 
-Set them as string constants at the top of `ToiletDataService.swift` before building.
+Set them as string constants near the top of `ToiletDataService.swift` before building.
 
----
+## Building from source
 
-## Building from Source
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/ramos1053/RamosTech.git
-cd RamosTech
-```
-
-### 2. Open in Xcode
+Clone the repository, then:
 
 ```bash
 open GottaGo/iOS/GottaGo.xcodeproj
 ```
 
-### 3. Select your team
+In the Project Navigator, select the GottaGo project (not the folder), go to the GottaGo target's **Signing & Capabilities**, and set **Team** to your own Apple ID — a free account is enough for simulator and personal-device testing.
 
-1. In the Project Navigator, click **GottaGo** (the project, not the folder)
-2. Select the **GottaGo** target → **Signing & Capabilities**
-3. Under **Team**, choose your Apple ID (a free account works for simulator and personal-device testing)
+For the simulator, pick an iOS 17+ device (iPhone 17 Pro or similar) and press ⌘R. For a real device, plug it in over USB, trust the computer, select it from the toolbar, and press ⌘R — Xcode handles signing and installation. On the phone, you'll need to go to Settings → General → VPN & Device Management and trust the developer certificate before it'll launch.
 
-### 4. Run on Simulator
+## Sideloading without a Mac
 
-Select **iPhone 17 Pro** (or any iOS 17+ simulator) from the device picker and press **⌘R**.
+Three free options for getting the `.ipa` onto your phone without building it yourself:
 
-### 5. Run on a Real Device (USB)
+**AltStore** — install AltStore on a PC or Mac, connect your iPhone over USB, grab the GottaGo `.ipa` from the Releases page, and import it from AltStore's `+` button. It re-signs the certificate automatically every 7 days (or use AltServer/AltStore PAL on a Mac for no expiration at all).
 
-1. Plug in your iPhone via USB and trust the computer
-2. Select your device from the toolbar
-3. Press **⌘R** — Xcode signs and installs automatically
-4. On your iPhone: **Settings → General → VPN & Device Management** → trust your developer certificate
+**SideStore** — same 7-day refresh model as AltStore, but works over Wi-Fi once you've done the initial setup.
 
----
+**Sideloadly** — download it for Windows or macOS, connect your iPhone, drag the `.ipa` in, sign in with your Apple ID, and trust the resulting certificate under Settings → VPN & Device Management.
 
-## Sideloading (No Xcode Required)
+Free Apple IDs cap you at 3 sideloaded apps at a time, and they expire after 7 days and need re-signing. A paid developer account ($99/year) removes both limits.
 
-If you don't have a Mac, you can sideload a pre-built `.ipa` using one of these free tools:
+### Enabling iCloud sync (needs a paid developer account)
 
-### Option A — AltStore (Recommended)
-1. Install [AltStore](https://altstore.io) on your PC or Mac
-2. Connect your iPhone via USB and open AltStore on your PC/Mac
-3. Download the GottaGo `.ipa` from the Releases page
-4. In AltStore on your iPhone → **+** → choose the `.ipa`
-5. AltStore refreshes the certificate automatically every 7 days (or use AltStore PAL / AltServer on a Mac for unlimited)
+Register an explicit App ID (`com.gottago.app`) at developer.apple.com under Identifiers, enable iCloud on it with Key-Value Storage checked, then uncomment the two iCloud lines in `GottaGo/GottaGo.entitlements`:
 
-### Option B — SideStore (Wireless)
-1. Install [SideStore](https://sidestore.io) — same 7-day refresh model but works over Wi-Fi after initial setup
-2. Import the `.ipa` the same way as AltStore
+```xml
+<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+<string>$(TeamIdentifierPrefix)com.gottago.app</string>
+```
 
-### Option C — Sideloadly
-1. Download [Sideloadly](https://sideloadly.io) (Windows or macOS)
-2. Connect iPhone via USB
-3. Drag the `.ipa` into Sideloadly, enter your Apple ID, click **Start**
-4. Trust the certificate in **Settings → VPN & Device Management**
+Rebuild and you're done.
 
-> **Note:** Free Apple IDs allow up to 3 apps sideloaded at a time. Apps expire after 7 days and must be re-signed. A paid Apple Developer account ($99/year) removes these limits.
-
-### Enabling iCloud Sync (Optional — Paid Developer Account Only)
-
-1. Sign in to [developer.apple.com](https://developer.apple.com) → **Identifiers**
-2. Register an explicit App ID: `com.gottago.app`
-3. Edit it → enable **iCloud** → check **iCloud Key-Value Storage** → Save
-4. In `GottaGo/GottaGo.entitlements`, uncomment the two iCloud lines:
-   ```xml
-   <key>com.apple.developer.ubiquity-kvstore-identifier</key>
-   <string>$(TeamIdentifierPrefix)com.gottago.app</string>
-   ```
-5. Rebuild
-
----
-
-## Tech Stack
+## Tech stack
 
 | Component | Technology |
 |-----------|-----------|
-| UI Framework | SwiftUI (iOS 17+) |
-| Map | MapKit (`Map`, `Annotation`, `MapPolyline`, `MapStyle`) |
-| Location | `CLLocationManager` / `CoreLocation` |
-| Networking | `URLSession` async/await |
-| Storage | `UserDefaults` + `NSUbiquitousKeyValueStore` (iCloud) |
-| Concurrency | Swift structured concurrency (`async let`, `Task`, `@MainActor`) |
+| UI | SwiftUI (iOS 17+) |
+| Map | MapKit — `Map`, `Annotation`, `MapPolyline`, `MapStyle` |
+| Location | CoreLocation / `CLLocationManager` |
+| Networking | `URLSession` with async/await |
+| Storage | `UserDefaults` plus `NSUbiquitousKeyValueStore` for iCloud |
+| Concurrency | Swift structured concurrency — `async let`, `Task`, `@MainActor` |
 | Architecture | MVVM (`ObservableObject` + `@EnvironmentObject`) |
 
----
+## Data licensing
 
-## Data Sources & Licensing
-
-- **OpenStreetMap** data © OpenStreetMap contributors, [ODbL](https://www.openstreetmap.org/copyright)
-- **Refuge Restrooms** — [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-- **Great British Toilet Map** — [Open Government Licence](https://www.nationalarchives.gov.uk/doc/open-government-licence/)
-- **Australian National Toilet Map** — [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/)
-- **Wheelmap** — [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (uses OSM data)
-- **Mapillary** — imagery © Mapillary contributors, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
-
----
+OpenStreetMap data is © OpenStreetMap contributors under [ODbL](https://www.openstreetmap.org/copyright). Refuge Restrooms and the Australian National Toilet Map are both [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The Great British Toilet Map is released under the [Open Government Licence](https://www.nationalarchives.gov.uk/doc/open-government-licence/). Wheelmap is [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (it uses OSM data underneath), and Mapillary imagery is © Mapillary contributors, also [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 
 ## Contributing
 
-Pull requests are welcome. For major changes, open an issue first.
-
-1. Fork the repo
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Commit: `git commit -m "Add my feature"`
-4. Push: `git push origin feature/my-feature`
-5. Open a Pull Request
-
----
+Pull requests are welcome — for anything big, open an issue first so we're on the same page before you put the work in.
 
 ## License
 
-This project is licensed under the terms in the [LICENSE](../LICENSE) file at the repository root.
+See the [LICENSE](../LICENSE) file at the repository root.
