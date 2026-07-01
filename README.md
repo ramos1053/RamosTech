@@ -1,19 +1,27 @@
 # RamosTech
 
-macOS tools, iOS apps, and utilities I've built over the years. Most are things I needed that didn't exist, or existed poorly.
+This is where I put projects that come out of poking at macOS — scripting, automation, the occasional enterprise workflow idea. Some of it ends up genuinely useful. A lot of it is just me trying to find the edges of what's possible, or figuring out why something doesn't work the way the docs say it should.
+
+## About me
+
+I spend most of my time in the Apple ecosystem — automation for macOS fleets, device management, secure workflow design. When I write documentation I try to write it for the person who has to use the thing, not for the person who already understands it.
 
 ## Projects
 
-| Project | Platform | What it does |
-|---|---|---|
-| [GottaGo](GottaGo/README.md) | iOS | Public restroom finder. Pulls live data from four databases simultaneously — OpenStreetMap, Refuge Restrooms, Great British Toilet Map, and the Australian National Toilet Map. One-tap walking directions. |
-| [Nimbus-Swift](Nimbus-Swift/README.md) | macOS | Full Swift rewrite of Nimbus, a Canto Cumulus server management tool originally built in AppleScript in 2003. |
-| [PIP](PIP/README.md) | macOS | Text editor built for bash scripting and multi-language development. Piece table architecture, async parsing, handles large files without choking. |
-| [Platy](Platy/README.md) | macOS | Local AI terminal console. Runs models through Ollama — no cloud, no account required. Optional Claude API fallback for heavier tasks. |
-| [Restless](Restless/README.md) | macOS | Menu bar app that keeps your Mac awake. Prevents sleep and screen lock, with duration and scheduled modes. No third-party dependencies. |
-| [Snipster](Snipster/README.md) | macOS | Menu bar snippet manager with keyboard triggers and a Spotlight-style quick-access window. |
-| [Time Machine Manager](Time%20Machine%20Manager/README.md) | macOS | Native SwiftUI interface for browsing and managing Time Machine local snapshots. |
+| Project | Platform | Description |
+|---------|----------|-------------|
+| [GottaGo](GottaGo/README.md) | iOS | Worldwide public restroom finder — live data from multiple APIs, interactive map, favorites, walking routes |
+| Nimbus-Swift | macOS | Canto Cumulus server tool |
+| PIP | macOS | Programming-focused text editor |
+| [Platy](Platy/README.md) | macOS | Local AI terminal console — runs models through Ollama, optional Claude API fallback |
+| Restless | macOS | Stay-awake and app-caffeinate tool |
+| Snipster | macOS | Code snippet manager |
+| Time Machine Manager | macOS | Time Machine backup utility |
 
 ## Stack
 
 Most of the macOS and iOS work is Swift. Platy is Python. Scripts are Bash.
+
+There's other stuff scattered around too — bash and Python snippets that probe macOS behavior, Jamf Pro and SentinelOne automation experiments, text-cleanup utilities, and a couple of half-built ideas for plugin systems that may or may not go anywhere.
+
+If something here saves you time, great. If not, it might at least save you from a dead end I already ran into.
