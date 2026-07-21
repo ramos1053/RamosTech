@@ -47,9 +47,14 @@ class WindowHelper {
     }
 
     static func openSettingsWindow(viewModel: SnippetViewModel) {
+        // Snipster is an LSUIElement (accessory) app, so a regular window needs
+        // an explicit activate or it can fail to come forward/become key —
+        // especially the first time a window is shown after launch.
+        NSApp.activate(ignoringOtherApps: true)
+
         // Check if settings window is already open
         if let existingWindow = WindowManager.shared.windows.first(where: { $0.title == "Settings" }) {
-            existingWindow.orderFront(nil)
+            existingWindow.makeKeyAndOrderFront(nil)
             return
         }
 
@@ -59,15 +64,18 @@ class WindowHelper {
 
         let hostingController = NSHostingController(rootView: settingsView)
 
-        let panel = NonActivatingWindow(contentViewController: hostingController)
-        panel.title = "Settings"
-        panel.setContentSize(NSSize(width: 480, height: 600))
-        panel.center()
-        panel.isReleasedWhenClosed = false
-        panel.orderFront(nil)
+        // Use a regular window (not a non-activating panel) so NSSwitch-backed
+        // toggles and other native controls render their full appearance.
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Settings"
+        window.styleMask = [.titled, .closable, .resizable]
+        window.setContentSize(NSSize(width: 800, height: 600))
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.makeKeyAndOrderFront(nil)
 
         // Store window reference to keep it alive
-        WindowManager.shared.addWindow(panel)
+        WindowManager.shared.addWindow(window)
     }
 
     static func openTagEditWindow(tag: Tag?, onSave: @escaping (Tag) -> Void) {
@@ -108,32 +116,6 @@ class DetailWindow: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
-}
-
-// Custom panel that doesn't activate/steal focus (keeps popover open)
-class NonActivatingWindow: NSPanel {
-    convenience init(contentViewController: NSViewController) {
-        self.init(
-            contentRect: .zero,
-            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        self.contentViewController = contentViewController
-        self.isFloatingPanel = true
-        self.becomesKeyOnlyIfNeeded = false
-        self.hidesOnDeactivate = false
-    }
-
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-
-    override var acceptsFirstResponder: Bool { true }
-
-    // Allow the panel to handle events without becoming key
-    override func sendEvent(_ event: NSEvent) {
-        super.sendEvent(event)
-    }
 }
 
 // Custom window that dismisses when clicking outside

@@ -13,6 +13,7 @@ struct SettingsView: View {
     @EnvironmentObject var viewModel: SnippetViewModel
     @StateObject private var textExpansion = TextExpansionMonitor.shared
     @StateObject private var hotkeyManager = HotkeyManager.shared
+    @StateObject private var copyPathService = CopyPathService.shared
     @StateObject private var hotkeyRecorder = HotkeyRecorderViewModel()
     @ObservedObject private var appSettings = AppSettings.shared
     @State private var launchAtLogin: Bool = false
@@ -51,7 +52,7 @@ struct SettingsView: View {
                                         Text("Enable Global Hotkey")
                                             .font(.subheadline)
                                     }
-                                    .toggleStyle(.switch)
+                                    .toggleStyle(SwitchToggleStyle(tint: .green))
 
                                     HStack {
                                         Text("Current:")
@@ -152,6 +153,27 @@ struct SettingsView: View {
                             .padding(10)
                         }
 
+                        // Finder Integration
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("Finder Integration", systemImage: "folder.badge.gearshape")
+                                    .font(.headline)
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Toggle(isOn: $copyPathService.isEnabled) {
+                                        Text("Enable \"Copy Path\" in Finder")
+                                            .font(.subheadline)
+                                    }
+                                    .toggleStyle(SwitchToggleStyle(tint: .green))
+
+                                    Text("Right-click a file in Finder and choose Services > Copy Path to copy its path to the clipboard. macOS always shows this menu item while Snipster is running; turning it off here makes Finder show an alert instead of copying the path.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(10)
+                        }
+
                         // Display Settings
                         GroupBox {
                             VStack(alignment: .leading, spacing: 8) {
@@ -187,7 +209,7 @@ struct SettingsView: View {
                                         Text("Launch at Login")
                                             .font(.subheadline)
                                     }
-                                    .toggleStyle(.switch)
+                                    .toggleStyle(SwitchToggleStyle(tint: .green))
                                     .onChange(of: launchAtLogin) { oldValue, newValue in
                                         setLaunchAtLogin(newValue)
                                     }
