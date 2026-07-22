@@ -215,6 +215,7 @@ class SpotlightWindowManager: ObservableObject {
         let searchView = SpotlightSearchView()
             .environmentObject(viewModel)
             .environmentObject(viewModel.tagStore)
+            .environmentObject(ClipboardHistoryService.shared)
 
         let hostingController = NSHostingController(rootView: searchView)
 

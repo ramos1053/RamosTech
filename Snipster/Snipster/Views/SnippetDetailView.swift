@@ -10,11 +10,17 @@ import SwiftUI
 struct SnippetDetailView: View {
     enum Mode {
         case add
+        /// Opened from a clipboard-history entry's "Save as Snippet" action,
+        /// pre-filling the content field. Kept as a separate case rather than
+        /// giving `.add` a default-valued associated value (Swift enum cases
+        /// can't have default parameter values), so the existing `.add` call
+        /// site needs no changes.
+        case addFromClipboard(String)
         case edit(Snippet)
 
         var title: String {
             switch self {
-            case .add: return "New Snippet"
+            case .add, .addFromClipboard: return "New Snippet"
             case .edit: return "Edit Snippet"
             }
         }
@@ -159,13 +165,18 @@ struct SnippetDetailView: View {
         }
         .frame(width: 500, height: 600)
         .onAppear {
-            if case .edit(let snippet) = mode {
+            switch mode {
+            case .edit(let snippet):
                 title = snippet.title
                 content = snippet.content
                 selectedTagIDs = snippet.tagIDs
                 triggerPrefix = snippet.triggerPrefix
                 triggerSequence = snippet.triggerSequence
                 isFavorite = snippet.isFavorite
+            case .addFromClipboard(let clipboardContent):
+                content = clipboardContent
+            case .add:
+                break
             }
             titleFieldFocused = true
         }
@@ -184,7 +195,7 @@ struct SnippetDetailView: View {
         guard !hasTriggerConflict else { return }
 
         switch mode {
-        case .add:
+        case .add, .addFromClipboard:
             viewModel.addSnippet(title: title, content: content, tagIDs: selectedTagIDs, triggerPrefix: triggerPrefix, triggerSequence: triggerSequence, isFavorite: isFavorite)
         case .edit(var snippet):
             snippet.updateTitle(title)

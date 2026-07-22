@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2a] - 2026-07-22
+
+### Added
+- **Clipboard history**
+  - Bounded, in-memory-only history of recent copies (never written to disk), browsable from the Spotlight-style quick-access window under a "Clipboard History" folder
+  - Selecting an older entry copies it back to the clipboard and moves it to the top of history
+  - Right-click any entry and choose "Save as Snippet" to keep it permanently
+  - New `{{CLIPBOARD:N}}` variable to reach back into history from within a snippet, alongside the existing `{{CLIPBOARD}}` for the current clipboard
+  - Settings > Clipboard History: enable/disable, history size (10/30/50/100), and an auto-clear schedule (never/hourly/daily/weekly)
+  - Copies marked concealed or transient (e.g. from password managers, via the `org.nspasteboard.*` convention) are never recorded
+- **Untagged folder**
+  - Snippets with no tags — including anything saved from clipboard history without adding one — now appear in their own "Untagged" folder in the quick-access window, instead of only being reachable by search
+- **SnipsterTests target**
+  - First unit test target in the project, covering the clipboard history ring buffer, the concealed/transient detection, and the `{{CLIPBOARD:N}}` variable parsing
+
 ## [1.2.0] - 2026-07-21
 
 ### Added

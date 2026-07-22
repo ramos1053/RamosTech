@@ -34,5 +34,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = HotkeyManager.shared
         _ = CopyPathService.shared
+        _ = ClipboardHistoryService.shared
     }
 }

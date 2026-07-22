@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		E0717E8C2EF1FD4D002EFD16 /* Snipster.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Snipster.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA00000000000000000002 /* SnipsterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SnipsterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +17,40 @@
 			path = Snipster;
 			sourceTree = "<group>";
 		};
+		AA00000000000000000001 /* SnipsterTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SnipsterTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXContainerItemProxy section */
+		AA0000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E0717E842EF1FD4D002EFD16 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E0717E8B2EF1FD4D002EFD16;
+			remoteInfo = Snipster;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		AA0000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E0717E8B2EF1FD4D002EFD16 /* Snipster */;
+			targetProxy = AA0000000000000000000B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		E0717E892EF1FD4D002EFD16 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA00000000000000000005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				E0717E8E2EF1FD4D002EFD16 /* Snipster */,
+				AA00000000000000000001 /* SnipsterTests */,
 				E0717E8D2EF1FD4D002EFD16 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +73,7 @@
 			isa = PBXGroup;
 			children = (
 				E0717E8C2EF1FD4D002EFD16 /* Snipster.app */,
+				AA00000000000000000002 /* SnipsterTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +103,29 @@
 			productReference = E0717E8C2EF1FD4D002EFD16 /* Snipster.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AA00000000000000000003 /* SnipsterTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000000000000000007 /* Build configuration list for PBXNativeTarget "SnipsterTests" */;
+			buildPhases = (
+				AA00000000000000000004 /* Sources */,
+				AA00000000000000000005 /* Frameworks */,
+				AA00000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA0000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AA00000000000000000001 /* SnipsterTests */,
+			);
+			name = SnipsterTests;
+			packageProductDependencies = (
+			);
+			productName = SnipsterTests;
+			productReference = AA00000000000000000002 /* SnipsterTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +138,10 @@
 				TargetAttributes = {
 					E0717E8B2EF1FD4D002EFD16 = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					AA00000000000000000003 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = E0717E8B2EF1FD4D002EFD16;
 					};
 				};
 			};
@@ -100,6 +160,7 @@
 			projectRoot = "";
 			targets = (
 				E0717E8B2EF1FD4D002EFD16 /* Snipster */,
+				AA00000000000000000003 /* SnipsterTests */,
 			);
 		};
 /* End PBXProject section */
@@ -112,10 +173,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA00000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		E0717E882EF1FD4D002EFD16 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA00000000000000000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -252,7 +327,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -266,7 +341,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.2a;
 				PRODUCT_BUNDLE_IDENTIFIER = com.RamosTech.Snipster;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -286,7 +361,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -300,7 +375,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.2a;
 				PRODUCT_BUNDLE_IDENTIFIER = com.RamosTech.Snipster;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -310,6 +385,38 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		AA00000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.RamosTech.SnipsterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Snipster.app/Contents/MacOS/Snipster";
+			};
+			name = Debug;
+		};
+		AA00000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.RamosTech.SnipsterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Snipster.app/Contents/MacOS/Snipster";
 			};
 			name = Release;
 		};
@@ -330,6 +437,15 @@
 			buildConfigurations = (
 				E0717E982EF1FD4E002EFD16 /* Debug */,
 				E0717E992EF1FD4E002EFD16 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00000000000000000007 /* Build configuration list for PBXNativeTarget "SnipsterTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000000000000000008 /* Debug */,
+				AA00000000000000000009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
