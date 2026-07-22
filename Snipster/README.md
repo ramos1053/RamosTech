@@ -1,16 +1,24 @@
 # Snipster
 
-Version 1.2.0
+Version 1.2a
 
-A macOS menu bar app for managing and expanding text snippets — keyboard triggers, dynamic variables, tag-based organization, and a Spotlight-style quick-access window you can summon from anywhere with a global hotkey.
+A macOS menu bar app for managing and expanding text snippets — keyboard triggers, dynamic variables, tag-based organization, a bounded clipboard history, and a Spotlight-style quick-access window you can summon from anywhere with a global hotkey.
 
-## What changed in 1.2
+## What changed in 1.2a
 
-The main addition is Finder integration: right-click any file or folder and choose Services > Copy Path to copy its path to the clipboard as plain text, with an on/off toggle in Settings. Alongside that, this release fixes a startup-timing bug where the global hotkey and the new Copy Path service wouldn't actually register until the menu bar popover had been opened at least once, replaces the Settings window's non-activating panel (which was silently preventing toggle switches from drawing correctly) with a normal window, and tints Settings toggles green when they're on. Full details are in [CHANGELOG.md](CHANGELOG.md).
+This release adds clipboard history: a bounded, in-memory-only record of recent copies, browsable from the same quick-access window under a "Clipboard History" folder. Selecting an older entry copies it back and moves it to the top; right-click any entry to save it as a permanent snippet. A new `{{CLIPBOARD:N}}` variable reaches back into that history from within a snippet. Snippets with no tags — including anything saved from clipboard history without adding one — now get their own "Untagged" folder in the quick-access window instead of only being reachable by search. Full details are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Quick access
 
 Press the hotkey from anywhere and you land in a tag-folder view — click or Enter to drill down, or just start typing to search across titles, content, and triggers simultaneously, with results updating live. Arrow keys navigate, Enter selects, Escape backs out a level or closes the window entirely, and the window itself can be dragged anywhere and will remember its position. A conflict detector warns if your chosen hotkey clashes with something the system already uses.
+
+## Clipboard history
+
+The quick-access window keeps a running, in-memory record of your last several copies — nothing is ever written to disk, and it clears automatically when Snipster quits, plus whatever auto-clear schedule you set (never, hourly, daily, or weekly) as a safety net for sessions that run for days. Browse it from the "Clipboard History" folder at the top of the window; selecting an older entry copies it back to the clipboard and moves it to the top. Right-click any entry and choose Save as Snippet to keep it permanently — it opens the usual new-snippet editor pre-filled with that content.
+
+Copies from apps that mark their pasteboard content as concealed or transient (password managers like 1Password, for instance) are never recorded, following the same `org.nspasteboard.*` convention those apps already use to opt out of other clipboard managers.
+
+History size (10, 30, 50, or 100 entries) and the auto-clear interval are both configurable from Settings > Clipboard History, along with a Clear History Now button.
 
 ## Copy Path in Finder
 
@@ -22,7 +30,7 @@ Snippets expand via clipboard-based insertion, triggered by a prefix-plus-keywor
 
 ## Dynamic variables
 
-Snippets can embed live content: date variables (`{{DATE}}`, `{{DATE:LONG}}`, `{{DATE:CUSTOM:yyyy-MM-dd}}` and similar), time variables (`{{TIME}}`, `{{TIME:24}}`), `{{CLIPBOARD}}` for whatever's currently copied, `{{USERNAME}}` / `{{USER}}` / `{{HOSTNAME}}` for system info, and `{{CURSOR}}` to place the cursor at a specific spot after expansion.
+Snippets can embed live content: date variables (`{{DATE}}`, `{{DATE:LONG}}`, `{{DATE:CUSTOM:yyyy-MM-dd}}` and similar), time variables (`{{TIME}}`, `{{TIME:24}}`), `{{CLIPBOARD}}` for whatever's currently copied (or `{{CLIPBOARD:2}}`, `{{CLIPBOARD:3}}`, and so on to reach further back into clipboard history), `{{USERNAME}}` / `{{USER}}` / `{{HOSTNAME}}` for system info, and `{{CURSOR}}` to place the cursor at a specific spot after expansion.
 
 For example:
 
@@ -64,6 +72,8 @@ Snipster stores its data locally by default (`~/Library/Application Support/Snip
 
 Clone the repository, open `Snipster.xcodeproj`, and on the Snipster target's Signing & Capabilities tab set Team to your own Apple developer account (or "Sign to Run Locally" for an ad-hoc build) — the project ships with no team configured. Select the Snipster scheme and press Cmd+R — the app appears in your menu bar once it launches. The first time you try to expand a trigger, macOS will ask for Accessibility permission; head to System Settings → Privacy & Security → Accessibility and enable Snipster there.
 
+Run the unit tests with Cmd+U, or `xcodebuild -scheme Snipster -destination 'platform=macOS' test` from the command line.
+
 From there: click the menu bar icon, create your first snippet with the + button, set your hotkey in Settings if you don't want the default, and you're up and running.
 
 ## Requirements
@@ -78,7 +88,7 @@ Globally, `Cmd+Shift+S` opens the Spotlight-style search (customizable) and `Cmd
 
 ## How it's built
 
-`SnippetStore` handles persistence and CRUD, `TagStore` manages the tag library and colors, `TextExpansionMonitor` watches keyboard input for triggers with thread-safe handling, `HotkeyManager` registers the global hotkey through Carbon's `RegisterEventHotKey` with conflict detection built in, and `FileStorageManager` handles JSON storage across whichever location you've picked (local, iCloud, or Dropbox). `CopyPathService` registers Snipster as a Finder Services provider for Copy Path and gates it on the Settings toggle. On the UI side, `SpotlightWindow` is a custom `NSPanel` that remembers its position, and `MenuBarPopoverView` is the main list/search/filter interface.
+`SnippetStore` handles persistence and CRUD, `TagStore` manages the tag library and colors, `TextExpansionMonitor` watches keyboard input for triggers with thread-safe handling, `HotkeyManager` registers the global hotkey through Carbon's `RegisterEventHotKey` with conflict detection built in, and `FileStorageManager` handles JSON storage across whichever location you've picked (local, iCloud, or Dropbox). `CopyPathService` registers Snipster as a Finder Services provider for Copy Path and gates it on the Settings toggle. `ClipboardHistoryService` polls the pasteboard for changes and owns the in-memory ring buffer (`ClipboardHistoryBuffer`), which is covered by unit tests in `SnipsterTests`. On the UI side, `SpotlightWindow` is a custom `NSPanel` that remembers its position, and `MenuBarPopoverView` is the main list/search/filter interface.
 
 The stack is SwiftUI for the UI, Combine for state management, AppKit for window handling, Carbon for the legacy global-hotkey APIs, and CoreGraphics for simulating keyboard events during expansion.
 

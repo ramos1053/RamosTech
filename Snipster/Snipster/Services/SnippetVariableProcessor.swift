@@ -153,6 +153,37 @@ nonisolated final class SnippetVariableProcessor: Sendable {
             result = result.replacingOccurrences(of: "{{CLIPBOARD}}", with: bounded)
         }
 
+        result = processClipboardHistoryVariables(result)
+
+        return result
+    }
+
+    /// {{CLIPBOARD:N}} - Insert the Nth most recent clipboard history entry
+    /// (1-based, most-recent-first). `lookup` defaults to the real clipboard
+    /// history service but is injectable so this can be unit-tested without
+    /// touching `NSPasteboard` or `ClipboardHistoryService` at all. Not
+    /// `private`, so the test target can reach it via `@testable import`.
+    func processClipboardHistoryVariables(
+        _ content: String,
+        lookup: (Int) -> String? = { ClipboardHistoryService.shared.historyEntry(back: $0) }
+    ) -> String {
+        let pattern = #"\{\{CLIPBOARD:(\d+)\}\}"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return content }
+
+        var result = content
+        let matches = regex.matches(in: content, range: NSRange(content.startIndex..., in: content))
+
+        for match in matches.reversed() {
+            guard match.numberOfRanges == 2,
+                  let matchRange = Range(match.range, in: content),
+                  let indexRange = Range(match.range(at: 1), in: content),
+                  let n = Int(content[indexRange]) else { continue }
+
+            let value = lookup(n) ?? ""
+            let bounded = String(value.prefix(Self.maxClipboardLength))
+            result.replaceSubrange(matchRange, with: bounded)
+        }
+
         return result
     }
 

@@ -286,6 +286,10 @@ class TextExpansionMonitor: ObservableObject {
     nonisolated private func typeText(_ text: String) {
         // Use pasteboard to insert text instantly
         DispatchQueue.main.async {
+            // Both the transient snippet-content write below and the restore
+            // 0.1s later must never be recorded as clipboard history entries.
+            ClipboardHistoryService.shared.suppressBriefly()
+
             let pasteboard = NSPasteboard.general
             let previousContents = pasteboard.string(forType: .string)
 

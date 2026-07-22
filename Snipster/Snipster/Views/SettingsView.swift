@@ -14,6 +14,7 @@ struct SettingsView: View {
     @StateObject private var textExpansion = TextExpansionMonitor.shared
     @StateObject private var hotkeyManager = HotkeyManager.shared
     @StateObject private var copyPathService = CopyPathService.shared
+    @StateObject private var clipboardHistory = ClipboardHistoryService.shared
     @StateObject private var hotkeyRecorder = HotkeyRecorderViewModel()
     @ObservedObject private var appSettings = AppSettings.shared
     @State private var launchAtLogin: Bool = false
@@ -167,6 +168,59 @@ struct SettingsView: View {
                                     .toggleStyle(SwitchToggleStyle(tint: .green))
 
                                     Text("Right-click a file in Finder and choose Services > Copy Path to copy its path to the clipboard. macOS always shows this menu item while Snipster is running; turning it off here makes Finder show an alert instead of copying the path.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(10)
+                        }
+
+                        // Clipboard History
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("Clipboard History", systemImage: "doc.on.clipboard")
+                                    .font(.headline)
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Toggle(isOn: $clipboardHistory.isEnabled) {
+                                        Text("Remember recent clipboard copies")
+                                            .font(.subheadline)
+                                    }
+                                    .toggleStyle(SwitchToggleStyle(tint: .green))
+
+                                    HStack {
+                                        Text("Keep last:")
+                                            .font(.subheadline)
+                                        Spacer()
+                                        Picker("", selection: $clipboardHistory.historyLimit) {
+                                            Text("10").tag(10)
+                                            Text("30").tag(30)
+                                            Text("50").tag(50)
+                                            Text("100").tag(100)
+                                        }
+                                        .pickerStyle(.segmented)
+                                        .frame(width: 220)
+                                    }
+
+                                    HStack {
+                                        Text("Auto-clear:")
+                                            .font(.subheadline)
+                                        Spacer()
+                                        Picker("", selection: $clipboardHistory.wipeInterval) {
+                                            ForEach(ClipboardHistoryService.WipeInterval.allCases) { interval in
+                                                Text(interval.label).tag(interval)
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
+                                        .frame(width: 140)
+                                    }
+
+                                    Button("Clear History Now") {
+                                        clipboardHistory.clearNow()
+                                    }
+                                    .disabled(clipboardHistory.entries.isEmpty)
+
+                                    Text("History is kept in memory only — it's never written to disk, and clears automatically when Snipster quits in addition to whatever auto-clear schedule you choose above. Right-click any entry in the quick-access search window and choose \"Save as Snippet\" to keep it permanently.")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }

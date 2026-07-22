@@ -13,6 +13,8 @@ enum NavigationLevel: Equatable {
     case tags
     case allSnippets
     case tagSnippets(Tag)
+    case clipboardHistory
+    case untaggedSnippets
 }
 
 /// A Spotlight-style search interface for quickly finding and inserting snippets
@@ -20,6 +22,7 @@ enum NavigationLevel: Equatable {
 struct SpotlightSearchView: View {
     @EnvironmentObject var viewModel: SnippetViewModel
     @EnvironmentObject var tagStore: TagStore
+    @EnvironmentObject var clipboardHistory: ClipboardHistoryService
 
     @State private var searchText: String = ""
     @State private var selectedIndex: Int = 0
@@ -36,8 +39,17 @@ struct SpotlightSearchView: View {
                 let items: [SpotlightItem] = filteredAllSnippets.map { SpotlightItem.snippet($0) }
                 return items
             } else {
-                // No search - show tag folders
-                let items: [SpotlightItem] = filteredTags.map { SpotlightItem.tag($0) }
+                // No search - show tag folders, with pinned pseudo-folders
+                // (Clipboard History, Untagged) at the top when they have
+                // anything in them.
+                var items: [SpotlightItem] = []
+                if clipboardHistory.isEnabled && !clipboardHistory.entries.isEmpty {
+                    items.append(.clipboardHistoryFolder)
+                }
+                if untaggedSnippetCount > 0 {
+                    items.append(.untaggedFolder)
+                }
+                items.append(contentsOf: filteredTags.map { SpotlightItem.tag($0) })
                 return items
             }
         case .allSnippets:
@@ -46,6 +58,12 @@ struct SpotlightSearchView: View {
         case .tagSnippets(let tag):
             let snippets = filteredSnippetsForTag(tag)
             let items: [SpotlightItem] = snippets.map { SpotlightItem.snippet($0) }
+            return items
+        case .clipboardHistory:
+            let items: [SpotlightItem] = filteredHistoryEntries.map { SpotlightItem.historyEntry($0) }
+            return items
+        case .untaggedSnippets:
+            let items: [SpotlightItem] = filteredUntaggedSnippets.map { SpotlightItem.snippet($0) }
             return items
         }
     }
@@ -98,6 +116,45 @@ struct SpotlightSearchView: View {
         viewModel.snippetStore.snippets.filter { $0.tagIDs.contains(tag.id) }.count
     }
 
+    private var untaggedSnippetCount: Int {
+        viewModel.snippetStore.snippets.filter { $0.tagIDs.isEmpty }.count
+    }
+
+    private var filteredUntaggedSnippets: [Snippet] {
+        let untagged = viewModel.snippetStore.snippets.filter { $0.tagIDs.isEmpty }
+
+        if searchText.isEmpty {
+            return untagged
+        }
+
+        return untagged.filter { snippet in
+            snippet.title.localizedCaseInsensitiveContains(searchText) ||
+            snippet.content.localizedCaseInsensitiveContains(searchText) ||
+            snippet.trigger.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private func itemSnippetCount(for item: SpotlightItem) -> Int? {
+        switch item {
+        case .tag(let tag):
+            return snippetCount(for: tag)
+        case .untaggedFolder:
+            return untaggedSnippetCount
+        default:
+            return nil
+        }
+    }
+
+    private var filteredHistoryEntries: [ClipboardHistoryEntry] {
+        let allEntries = clipboardHistory.entries
+
+        if searchText.isEmpty {
+            return allEntries
+        }
+
+        return allEntries.filter { $0.content.localizedCaseInsensitiveContains(searchText) }
+    }
+
     private var breadcrumbText: String {
         switch navigationLevel {
         case .tags:
@@ -106,6 +163,10 @@ struct SpotlightSearchView: View {
             return "All Snippets"
         case .tagSnippets(let tag):
             return tag.name
+        case .clipboardHistory:
+            return "Clipboard History"
+        case .untaggedSnippets:
+            return "Untagged"
         }
     }
 
@@ -113,7 +174,7 @@ struct SpotlightSearchView: View {
         switch navigationLevel {
         case .tags:
             return false
-        case .allSnippets, .tagSnippets:
+        case .allSnippets, .tagSnippets, .clipboardHistory, .untaggedSnippets:
             return true
         }
     }
@@ -219,8 +280,9 @@ struct SpotlightSearchView: View {
                                 SpotlightItemRow(
                                     item: item,
                                     isSelected: index == selectedIndex,
-                                    snippetCount: item.tag.map { snippetCount(for: $0) },
-                                    tagStore: tagStore
+                                    snippetCount: itemSnippetCount(for: item),
+                                    tagStore: tagStore,
+                                    onPromoteToSnippet: promoteToSnippet
                                 )
                                 .id(item.id)
                                 .contentShape(Rectangle())
@@ -247,6 +309,10 @@ struct SpotlightSearchView: View {
                 if case .tagSnippets = navigationLevel {
                     KeyboardShortcutHint(key: "⌘↵", description: "Paste")
                 } else if case .allSnippets = navigationLevel {
+                    KeyboardShortcutHint(key: "⌘↵", description: "Paste")
+                } else if case .clipboardHistory = navigationLevel {
+                    KeyboardShortcutHint(key: "⌘↵", description: "Paste")
+                } else if case .untaggedSnippets = navigationLevel {
                     KeyboardShortcutHint(key: "⌘↵", description: "Paste")
                 }
                 KeyboardShortcutHint(key: "ESC", description: showBackButton ? "Back" : "Close")
@@ -311,6 +377,10 @@ struct SpotlightSearchView: View {
             return "doc.on.doc"
         case .tagSnippets:
             return "tag.fill"
+        case .clipboardHistory:
+            return "doc.on.clipboard"
+        case .untaggedSnippets:
+            return "tray"
         }
     }
 
@@ -322,6 +392,10 @@ struct SpotlightSearchView: View {
             return "Search snippets..."
         case .tagSnippets(let tag):
             return "Search in \(tag.name)..."
+        case .clipboardHistory:
+            return "Search clipboard history..."
+        case .untaggedSnippets:
+            return "Search untagged snippets..."
         }
     }
 
@@ -329,8 +403,10 @@ struct SpotlightSearchView: View {
         switch navigationLevel {
         case .tags:
             return "tag.slash"
-        case .allSnippets, .tagSnippets:
+        case .allSnippets, .tagSnippets, .untaggedSnippets:
             return "doc.text.magnifyingglass"
+        case .clipboardHistory:
+            return "doc.on.clipboard"
         }
     }
 
@@ -342,6 +418,10 @@ struct SpotlightSearchView: View {
             return searchText.isEmpty ? "No snippets found" : "No results for '\(searchText)'"
         case .tagSnippets(let tag):
             return searchText.isEmpty ? "No snippets in \(tag.name)" : "No results in \(tag.name)"
+        case .clipboardHistory:
+            return searchText.isEmpty ? "No clipboard history yet" : "No results for '\(searchText)'"
+        case .untaggedSnippets:
+            return searchText.isEmpty ? "No untagged snippets" : "No results for '\(searchText)'"
         }
     }
 
@@ -384,6 +464,17 @@ struct SpotlightSearchView: View {
         case .allSnippetsOption:
             // Navigate to all snippets
             navigationLevel = .allSnippets
+        case .clipboardHistoryFolder:
+            // Navigate into clipboard history
+            navigationLevel = .clipboardHistory
+        case .untaggedFolder:
+            // Navigate into untagged snippets
+            navigationLevel = .untaggedSnippets
+        case .historyEntry(let entry):
+            // Copy the raw history content (no variable processing — it's
+            // already-copied text, not a snippet) and dismiss
+            copyHistoryEntry(entry)
+            dismissWindow()
         }
     }
 
@@ -398,6 +489,13 @@ struct SpotlightSearchView: View {
             dismissWindow()
 
             // Small delay before pasting
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                simulatePaste()
+            }
+        case .historyEntry(let entry):
+            copyHistoryEntry(entry)
+            dismissWindow()
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 simulatePaste()
             }
@@ -420,6 +518,20 @@ struct SpotlightSearchView: View {
         var updatedSnippet = snippet
         updatedSnippet.incrementUsage()
         viewModel.updateSnippet(updatedSnippet)
+    }
+
+    private func copyHistoryEntry(_ entry: ClipboardHistoryEntry) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(entry.content, forType: .string)
+        // Deliberately not suppressed: the background poller picking this back
+        // up and re-inserting it is what makes "select an old entry" bump it
+        // to the top of history, matching expected clipboard-manager behavior.
+    }
+
+    private func promoteToSnippet(_ entry: ClipboardHistoryEntry) {
+        WindowHelper.openSnippetDetailWindow(mode: .addFromClipboard(entry.content), viewModel: viewModel)
+        dismissWindow()
     }
 
     private func simulatePaste() {
@@ -458,6 +570,9 @@ enum SpotlightItem: Identifiable {
     case tag(Tag)
     case snippet(Snippet)
     case allSnippetsOption
+    case clipboardHistoryFolder
+    case historyEntry(ClipboardHistoryEntry)
+    case untaggedFolder
 
     var id: String {
         switch self {
@@ -467,6 +582,12 @@ enum SpotlightItem: Identifiable {
             return "snippet-\(snippet.id.uuidString)"
         case .allSnippetsOption:
             return "all-snippets"
+        case .clipboardHistoryFolder:
+            return "clipboard-history-folder"
+        case .historyEntry(let entry):
+            return "history-\(entry.id.uuidString)"
+        case .untaggedFolder:
+            return "untagged-folder"
         }
     }
 
@@ -492,12 +613,13 @@ struct SpotlightItemRow: View {
     let isSelected: Bool
     let snippetCount: Int?
     let tagStore: TagStore
+    let onPromoteToSnippet: (ClipboardHistoryEntry) -> Void
 
     private var isNavigable: Bool {
         switch item {
-        case .tag, .allSnippetsOption:
+        case .tag, .allSnippetsOption, .clipboardHistoryFolder, .untaggedFolder:
             return true
-        case .snippet:
+        case .snippet, .historyEntry:
             return false
         }
     }
@@ -567,6 +689,13 @@ struct SpotlightItemRow: View {
         .padding(.vertical, 8)
         .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
         .contentShape(Rectangle())
+        .contextMenu {
+            if case .historyEntry(let entry) = item {
+                Button("Save as Snippet") {
+                    onPromoteToSnippet(entry)
+                }
+            }
+        }
     }
 
     private var iconName: String {
@@ -577,6 +706,10 @@ struct SpotlightItemRow: View {
             return snippet.isFavorite ? "star.fill" : "doc.text"
         case .allSnippetsOption:
             return "doc.on.doc.fill"
+        case .clipboardHistoryFolder, .historyEntry:
+            return "doc.on.clipboard"
+        case .untaggedFolder:
+            return "tray.fill"
         }
     }
 
@@ -588,6 +721,8 @@ struct SpotlightItemRow: View {
             return snippet.isFavorite ? .yellow : .secondary
         case .allSnippetsOption:
             return .accentColor
+        case .clipboardHistoryFolder, .historyEntry, .untaggedFolder:
+            return .secondary
         }
     }
 
@@ -606,6 +741,16 @@ struct SpotlightItemRow: View {
             return snippet.title
         case .allSnippetsOption:
             return "All Snippets"
+        case .clipboardHistoryFolder:
+            return "Clipboard History"
+        case .historyEntry(let entry):
+            let firstLine = entry.content
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .split(separator: "\n", maxSplits: 1)
+                .first.map(String.init) ?? entry.content
+            return String(firstLine.prefix(60))
+        case .untaggedFolder:
+            return "Untagged"
         }
     }
 
@@ -613,6 +758,10 @@ struct SpotlightItemRow: View {
         switch item {
         case .snippet(let snippet):
             return snippet.trigger.isEmpty ? nil : snippet.trigger
+        case .historyEntry(let entry):
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .abbreviated
+            return formatter.localizedString(for: entry.capturedAt, relativeTo: Date())
         default:
             return nil
         }
@@ -630,6 +779,8 @@ struct SpotlightItemRow: View {
         switch item {
         case .snippet(let snippet):
             return snippet.content
+        case .historyEntry(let entry):
+            return entry.content
         default:
             return nil
         }
@@ -693,4 +844,5 @@ struct TagListView: View {
     return SpotlightSearchView()
         .environmentObject(viewModel)
         .environmentObject(viewModel.tagStore)
+        .environmentObject(ClipboardHistoryService.shared)
 }
