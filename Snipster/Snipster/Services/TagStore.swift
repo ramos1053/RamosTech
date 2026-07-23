@@ -56,6 +56,21 @@ class TagStore: ObservableObject {
         await saveTags()
     }
 
+    /// Adds any imported tags this store doesn't already have (matched by
+    /// id). Existing tags are left untouched — an import shouldn't clobber a
+    /// tag's current name/color just because a backup file also had a copy
+    /// of it.
+    func mergeTags(_ importedTags: [Tag]) async {
+        var didChange = false
+        for imported in importedTags where tag(byID: imported.id) == nil {
+            tags.append(imported)
+            didChange = true
+        }
+        if didChange {
+            await saveTags()
+        }
+    }
+
     // MARK: - Lookup methods
 
     func tag(byID id: UUID) -> Tag? {

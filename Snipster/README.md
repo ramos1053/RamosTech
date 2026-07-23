@@ -1,12 +1,12 @@
 # Snipster
 
-Version 1.2a
+Version 1.3
 
 A macOS menu bar app for managing and expanding text snippets — keyboard triggers, dynamic variables, tag-based organization, a bounded clipboard history, and a Spotlight-style quick-access window you can summon from anywhere with a global hotkey.
 
-## What changed in 1.2a
+## What changed in 1.3
 
-This release adds clipboard history: a bounded, in-memory-only record of recent copies, browsable from the same quick-access window under a "Clipboard History" folder. Selecting an older entry copies it back and moves it to the top; right-click any entry to save it as a permanent snippet. A new `{{CLIPBOARD:N}}` variable reaches back into that history from within a snippet. Snippets with no tags — including anything saved from clipboard history without adding one — now get their own "Untagged" folder in the quick-access window instead of only being reachable by search. Full details are in [CHANGELOG.md](CHANGELOG.md).
+You can now select multiple snippets at once — via checkbox, in either the menu bar list or the quick-access window — and delete them together. Storage location is a plain folder picker now instead of separate iCloud/OneDrive options that depended on an entitlement that, it turns out, was never actually wired up correctly; point it at any folder you can navigate to, and the choice actually survives a relaunch this time. Snippets and tags are combined into a single file, so exporting a backup no longer leaves tags behind. The tag filter in the menu bar popover is a compact dropdown now instead of a horizontal-scrolling row of pills. Full details are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Quick access
 
@@ -62,11 +62,13 @@ Best regards,[cursor positioned here]
 
 Create, edit, and duplicate snippets from the menu bar, star favorites for quick access, and filter by text, tag, or favorite status — sortable by title, tag, color, or creation/modification date. Preview length is adjustable (0, 1, or 2 lines), and a right-click context menu covers Edit, Favorite, Duplicate, Copy, and Delete.
 
-Export writes everything to a formatted JSON file; import handles conflicts with merge (keeps whichever version was modified more recently), replace (always takes the imported version), or skip (keeps what's already there), and shows a summary of what was added, updated, or skipped. Older export formats still import fine.
+Check a snippet's checkbox — in either the menu bar list or the quick-access window — to select more than one at a time; the Delete key or right-click removes whatever's checked, with a confirmation if you've selected more than one.
 
-Tags get their own color via a full color picker, with tag buttons for filtering, inline tag management in Settings, per-tag snippet counts, and truncation to keep the tag list compact.
+Export writes snippets and tags together to a single formatted JSON file, so a backup never leaves imported snippets with orphaned tags; import handles conflicts with merge (keeps whichever version was modified more recently), replace (always takes the imported version), or skip (keeps what's already there), and shows a summary of what was added, updated, or skipped. Older, snippets-only export files still import fine, just without tag data.
 
-Snipster stores its data locally by default (`~/Library/Application Support/Snipster/`), but you can switch to iCloud Drive or a Dropbox folder from Settings if you want snippets synced across machines.
+Tags get their own color via a full color picker, with a dropdown for filtering, inline tag management in Settings, per-tag snippet counts, and truncation to keep the tag list compact. Sort by Tag (in the Sort menu) is a separate, complementary feature — it's alphabetical by tag name and reorders the whole list rather than hiding anything.
+
+Snipster stores its data locally by default (`~/Library/Application Support/Snipster/`), or you can point it at any folder you can navigate to — iCloud Drive, OneDrive, Google Drive, Dropbox, an external volume — from Settings > Storage > Change > Custom Folder.
 
 ## Building from source
 
@@ -84,11 +86,11 @@ From there: click the menu bar icon, create your first snippet with the + button
 
 ## Keyboard shortcuts
 
-Globally, `Cmd+Shift+S` opens the Spotlight-style search (customizable) and `Cmd+Q` quits from the menu bar dropdown. Inside that search window, `↑`/`↓` navigate, `Return` opens a folder or copies a snippet, `Cmd+Return` copies and auto-pastes, and `Esc` backs out or closes. In the snippet editor, `Cmd+Return` saves and `Esc` cancels. From the main menu bar view, `Cmd+N` creates a new snippet, double-clicking one copies its content, and right-clicking opens the context menu.
+Globally, `Cmd+Shift+S` opens the Spotlight-style search (customizable) and `Cmd+Q` quits from the menu bar dropdown. Inside that search window, `↑`/`↓` navigate, `Return` opens a folder or copies a snippet, `Cmd+Return` copies and auto-pastes, `⌫` deletes whatever's checked, and `Esc` backs out or closes. In the snippet editor, `Cmd+Return` saves and `Esc` cancels. From the main menu bar view, `Cmd+N` creates a new snippet, double-clicking one copies its content, right-clicking opens the context menu, and `⌫` deletes whatever's checked.
 
 ## How it's built
 
-`SnippetStore` handles persistence and CRUD, `TagStore` manages the tag library and colors, `TextExpansionMonitor` watches keyboard input for triggers with thread-safe handling, `HotkeyManager` registers the global hotkey through Carbon's `RegisterEventHotKey` with conflict detection built in, and `FileStorageManager` handles JSON storage across whichever location you've picked (local, iCloud, or Dropbox). `CopyPathService` registers Snipster as a Finder Services provider for Copy Path and gates it on the Settings toggle. `ClipboardHistoryService` polls the pasteboard for changes and owns the in-memory ring buffer (`ClipboardHistoryBuffer`), which is covered by unit tests in `SnipsterTests`. On the UI side, `SpotlightWindow` is a custom `NSPanel` that remembers its position, and `MenuBarPopoverView` is the main list/search/filter interface.
+`SnippetStore` handles persistence and CRUD, `TagStore` manages the tag library and colors, `TextExpansionMonitor` watches keyboard input for triggers with thread-safe handling, `HotkeyManager` registers the global hotkey through Carbon's `RegisterEventHotKey` with conflict detection built in, and `FileStorageManager` persists everything to a single combined file (`StorageDocument`, `snipster-library.json`) across whichever location you've picked — local or a custom folder — migrating an older two-file install automatically the first time it loads. `CopyPathService` registers Snipster as a Finder Services provider for Copy Path and gates it on the Settings toggle. `ClipboardHistoryService` polls the pasteboard for changes and owns the in-memory ring buffer (`ClipboardHistoryBuffer`), which is covered by unit tests in `SnipsterTests`. On the UI side, `SpotlightWindow` is a custom `NSPanel` that remembers its position, and `MenuBarPopoverView` is the main list/search/filter interface.
 
 The stack is SwiftUI for the UI, Combine for state management, AppKit for window handling, Carbon for the legacy global-hotkey APIs, and CoreGraphics for simulating keyboard events during expansion.
 

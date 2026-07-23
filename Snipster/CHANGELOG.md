@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.3] - 2026-07-23
+
+### Added
+- **Multi-select delete**
+  - Select multiple snippets at once via checkbox — in both the menu bar popover list and the Spotlight quick-access window
+  - Delete key or right-click removes whatever's checked; deleting 2+ at once asks for confirmation, single delete stays instant
+  - Checkboxes are a separate tap target from the row itself, so single-click-to-edit and double-click-to-copy are both unchanged
+- **Custom folder storage location**
+  - Replaces the old iCloud/OneDrive-specific storage options with a plain folder picker (`NSOpenPanel`) — works for iCloud Drive, OneDrive, Google Drive, Dropbox, or any mounted volume
+  - The storage location choice is now actually persisted across relaunches (previously always reset to Local)
+  - Switching to a new, empty location seeds it with your current snippets/tags instead of appearing to wipe them; switching to a location that already has data loads that instead
+
+### Fixed
+- iCloud Drive storage never actually worked: `Snipster.entitlements` declared the iCloud container keys, but the project file never wired up `CODE_SIGN_ENTITLEMENTS`, so the entitlement was never applied to any build. The custom-folder picker above sidesteps the issue entirely by not requiring any entitlement at all.
+- Exporting a snippets backup silently dropped tag data, leaving imported snippets with orphaned tagIDs that had to be manually rebuilt. Snippets and tags are now combined into a single file (`snipster-library.json`, replacing separate `snippets.json`/`tags.json`), so export/import always carry both together. Existing installs migrate automatically the first time they load; the old files are left in place, not deleted.
+
+### Changed
+- The tag filter in the menu bar popover is now a compact dropdown next to Sort, replacing the horizontal-scrolling row of tag pills. Same filtering behavior, no more sideways scrolling. (Sort by Tag remains alphabetical by tag name, unaffected by this — sort and filter are separate features.)
+
 ## [1.2a] - 2026-07-22
 
 ### Added

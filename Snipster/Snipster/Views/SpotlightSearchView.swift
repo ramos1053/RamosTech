@@ -29,6 +29,13 @@ struct SpotlightSearchView: View {
     @State private var navigationLevel: NavigationLevel = .tags
     @FocusState private var searchFieldFocused: Bool
 
+    /// Cmd/Shift-click multi-select, snippets only (tags/folders/history
+    /// entries aren't part of this). Independent of `selectedIndex`, which
+    /// is just the arrow-key cursor position.
+    @State private var multiSelectedIDs: Set<UUID> = []
+    @State private var pendingDeleteIDs: Set<UUID> = []
+    @State private var showingBulkDeleteConfirm = false
+
     // MARK: - Computed Properties
 
     private var currentItems: [SpotlightItem] {
@@ -280,9 +287,13 @@ struct SpotlightSearchView: View {
                                 SpotlightItemRow(
                                     item: item,
                                     isSelected: index == selectedIndex,
+                                    isMultiSelected: item.snippet.map { multiSelectedIDs.contains($0.id) } ?? false,
                                     snippetCount: itemSnippetCount(for: item),
                                     tagStore: tagStore,
-                                    onPromoteToSnippet: promoteToSnippet
+                                    onPromoteToSnippet: promoteToSnippet,
+                                    onDeleteSnippet: { requestDelete([$0.id]) },
+                                    onDeleteSelected: { requestDelete(multiSelectedIDs) },
+                                    onToggleCheck: { toggleChecked($0) }
                                 )
                                 .id(item.id)
                                 .contentShape(Rectangle())
@@ -304,16 +315,24 @@ struct SpotlightSearchView: View {
 
             // Footer with shortcuts
             HStack(spacing: 10) {
-                KeyboardShortcutHint(key: "↑↓", description: "Navigate")
-                KeyboardShortcutHint(key: "↵", description: navigationLevel == .tags ? "Open" : "Copy")
-                if case .tagSnippets = navigationLevel {
-                    KeyboardShortcutHint(key: "⌘↵", description: "Paste")
-                } else if case .allSnippets = navigationLevel {
-                    KeyboardShortcutHint(key: "⌘↵", description: "Paste")
-                } else if case .clipboardHistory = navigationLevel {
-                    KeyboardShortcutHint(key: "⌘↵", description: "Paste")
-                } else if case .untaggedSnippets = navigationLevel {
-                    KeyboardShortcutHint(key: "⌘↵", description: "Paste")
+                if !multiSelectedIDs.isEmpty {
+                    Text("\(multiSelectedIDs.count) selected")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.accentColor)
+                    KeyboardShortcutHint(key: "⌫", description: "Delete")
+                } else {
+                    KeyboardShortcutHint(key: "↑↓", description: "Navigate")
+                    KeyboardShortcutHint(key: "↵", description: navigationLevel == .tags ? "Open" : "Copy")
+                    if case .tagSnippets = navigationLevel {
+                        KeyboardShortcutHint(key: "⌘↵", description: "Paste")
+                    } else if case .allSnippets = navigationLevel {
+                        KeyboardShortcutHint(key: "⌘↵", description: "Paste")
+                    } else if case .clipboardHistory = navigationLevel {
+                        KeyboardShortcutHint(key: "⌘↵", description: "Paste")
+                    } else if case .untaggedSnippets = navigationLevel {
+                        KeyboardShortcutHint(key: "⌘↵", description: "Paste")
+                    }
                 }
                 KeyboardShortcutHint(key: "ESC", description: showBackButton ? "Back" : "Close")
 
@@ -340,6 +359,7 @@ struct SpotlightSearchView: View {
         .onChange(of: navigationLevel) { oldValue, newValue in
             selectedIndex = 0
             searchText = ""
+            multiSelectedIDs = []
         }
         .onKeyPress(keys: [.upArrow]) { _ in
             moveSelectionUp()
@@ -364,6 +384,22 @@ struct SpotlightSearchView: View {
                 dismissWindow()
             }
             return .handled
+        }
+        .onKeyPress(keys: [.delete]) { _ in
+            guard !multiSelectedIDs.isEmpty else { return .ignored }
+            requestDelete(multiSelectedIDs)
+            return .handled
+        }
+        .alert(
+            "Delete \(pendingDeleteIDs.count) Snippet\(pendingDeleteIDs.count == 1 ? "" : "s")?",
+            isPresented: $showingBulkDeleteConfirm
+        ) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                performDelete(pendingDeleteIDs)
+            }
+        } message: {
+            Text("This can't be undone.")
         }
     }
 
@@ -446,6 +482,37 @@ struct SpotlightSearchView: View {
     private func selectItem(at index: Int) {
         selectedIndex = index
         selectCurrentItem()
+    }
+
+    /// Toggles a snippet's checkbox — a separate tap target from the row
+    /// itself, so it doesn't disturb the row's normal click behavior (copy +
+    /// dismiss for snippets, navigate for folders).
+    private func toggleChecked(_ snippet: Snippet) {
+        if multiSelectedIDs.contains(snippet.id) {
+            multiSelectedIDs.remove(snippet.id)
+        } else {
+            multiSelectedIDs.insert(snippet.id)
+        }
+    }
+
+    private func requestDelete(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        pendingDeleteIDs = ids
+        if ids.count > 1 {
+            showingBulkDeleteConfirm = true
+        } else {
+            performDelete(ids)
+        }
+    }
+
+    private func performDelete(_ ids: Set<UUID>) {
+        viewModel.deleteSnippets(ids)
+        multiSelectedIDs.subtract(ids)
+        // deleteSnippets saves asynchronously, so currentItems hasn't shrunk
+        // yet — reset to a always-safe index rather than try to predict the
+        // post-delete count. selectCurrentItem() already guards selectedIndex
+        // against currentItems.count, so this is never out of bounds.
+        selectedIndex = 0
     }
 
     private func selectCurrentItem() {
@@ -611,9 +678,13 @@ enum SpotlightItem: Identifiable {
 struct SpotlightItemRow: View {
     let item: SpotlightItem
     let isSelected: Bool
+    let isMultiSelected: Bool
     let snippetCount: Int?
     let tagStore: TagStore
     let onPromoteToSnippet: (ClipboardHistoryEntry) -> Void
+    let onDeleteSnippet: (Snippet) -> Void
+    let onDeleteSelected: () -> Void
+    let onToggleCheck: (Snippet) -> Void
 
     private var isNavigable: Bool {
         switch item {
@@ -626,6 +697,19 @@ struct SpotlightItemRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            // Checkbox — its own tap target, separate from the row's normal
+            // click behavior (copy + dismiss for snippets). Only snippets are
+            // selectable/deletable this way, not tags/folders/history entries.
+            if let snippet = item.snippet {
+                Button(action: { onToggleCheck(snippet) }) {
+                    Image(systemName: isMultiSelected ? "checkmark.square.fill" : "square")
+                        .foregroundColor(isMultiSelected ? .accentColor : .secondary)
+                        .font(.body)
+                        .frame(width: 20)
+                }
+                .buttonStyle(.plain)
+            }
+
             // Icon
             Image(systemName: iconName)
                 .foregroundColor(iconColor)
@@ -687,12 +771,26 @@ struct SpotlightItemRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        .background(
+            isMultiSelected ? Color.accentColor.opacity(0.2)
+                : isSelected ? Color.accentColor.opacity(0.15)
+                : Color.clear
+        )
         .contentShape(Rectangle())
         .contextMenu {
             if case .historyEntry(let entry) = item {
                 Button("Save as Snippet") {
                     onPromoteToSnippet(entry)
+                }
+            } else if let snippet = item.snippet {
+                if isMultiSelected {
+                    Button("Delete Selected", role: .destructive) {
+                        onDeleteSelected()
+                    }
+                } else {
+                    Button("Delete", role: .destructive) {
+                        onDeleteSnippet(snippet)
+                    }
                 }
             }
         }
