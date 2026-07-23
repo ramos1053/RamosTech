@@ -52,6 +52,8 @@ struct MenuBarPopoverView: View {
                         Divider()
                             .frame(height: 20)
 
+                        Spacer()
+
                         // Tag filter
                         TagFilterBar(selectedTag: $selectedTag, allSnippets: viewModel.snippetStore.snippets)
                     }
@@ -101,44 +103,41 @@ struct TagFilterBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "tag")
-                .font(.caption)
-                .foregroundColor(.secondary)
+        Menu {
+            Button {
+                selectedTag = nil
+            } label: {
+                Text("All Tags")
+            }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    Button(action: { selectedTag = nil }) {
-                        Text("All")
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(selectedTag == nil ? Color.accentColor : Color.secondary.opacity(0.2))
-                            .foregroundColor(selectedTag == nil ? .white : .primary)
-                            .cornerRadius(10)
-                    }
-                    .buttonStyle(.plain)
+            if !allTags.isEmpty {
+                Divider()
 
-                    ForEach(allTags) { tag in
-                        Button(action: { selectedTag = tag }) {
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(tag.color)
-                                    .frame(width: 6, height: 6)
-                                Text(tag.name)
-                                    .font(.caption)
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(selectedTag?.id == tag.id ? tag.color : tag.color.opacity(0.2))
-                            .foregroundColor(selectedTag?.id == tag.id ? .white : .primary)
-                            .cornerRadius(10)
+                ForEach(allTags) { tag in
+                    Button {
+                        selectedTag = tag
+                    } label: {
+                        Label {
+                            Text(tag.name)
+                        } icon: {
+                            Image(systemName: "circle.fill")
+                                .foregroundStyle(tag.color)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
+        } label: {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(selectedTag?.color ?? Color.accentColor)
+                    .frame(width: 7, height: 7)
+                Text(selectedTag?.name ?? "All Tags")
+                    .font(.caption)
+                    .lineLimit(1)
+            }
         }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 }
 

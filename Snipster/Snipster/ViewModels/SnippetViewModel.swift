@@ -13,11 +13,22 @@ class SnippetViewModel: ObservableObject {
     @Published var snippetStore: SnippetStore
     @Published var tagStore: TagStore
     @Published var searchText: String = ""
-    @Published var selectedSnippet: Snippet?
     @Published var storageLocation: StorageLocation
+    @Published var customStoragePath: URL?
 
     private let storageManager: FileStorageManager
     private var cancellables = Set<AnyCancellable>()
+
+    private static let storageLocationKey = "snipster.storageLocation"
+    private static let customStoragePathKey = "snipster.customStoragePath"
+
+    /// The actual path in effect right now, regardless of which mode is active.
+    var resolvedStoragePath: URL? {
+        switch storageLocation {
+        case .local: return storageLocation.defaultPath
+        case .custom: return customStoragePath
+        }
+    }
 
     var filteredSnippets: [Snippet] {
         snippetStore.searchSnippets(query: searchText)
@@ -27,9 +38,19 @@ class SnippetViewModel: ObservableObject {
         !snippetStore.snippets.isEmpty
     }
 
-    init(storageLocation: StorageLocation = .local) {
-        self.storageLocation = storageLocation
-        self.storageManager = FileStorageManager(location: storageLocation)
+    init() {
+        let defaults = UserDefaults.standard
+        let savedLocation = defaults.string(forKey: Self.storageLocationKey)
+            .flatMap(StorageLocation.init(rawValue:)) ?? .local
+        let savedCustomPath = defaults.string(forKey: Self.customStoragePathKey)
+            .map { URL(fileURLWithPath: $0) }
+
+        self.storageLocation = savedLocation
+        self.customStoragePath = savedLocation == .custom ? savedCustomPath : nil
+        self.storageManager = FileStorageManager(
+            location: savedLocation,
+            customPath: savedLocation == .custom ? savedCustomPath : nil
+        )
         self.snippetStore = SnippetStore(storageManager: storageManager)
         self.tagStore = TagStore(storageManager: storageManager)
 
@@ -90,16 +111,40 @@ class SnippetViewModel: ObservableObject {
         }
     }
 
-    func selectSnippet(_ snippet: Snippet?) {
-        selectedSnippet = snippet
+    func deleteSnippets(_ ids: Set<UUID>) {
+        Task { @MainActor in
+            await snippetStore.deleteSnippets(ids)
+            objectWillChange.send()
+        }
     }
 
-    func changeStorageLocation(_ location: StorageLocation) {
+    func changeStorageLocation(_ location: StorageLocation, customPath: URL? = nil) {
         storageLocation = location
+        customStoragePath = customPath
+
+        let defaults = UserDefaults.standard
+        defaults.set(location.rawValue, forKey: Self.storageLocationKey)
+        if let customPath {
+            defaults.set(customPath.path, forKey: Self.customStoragePathKey)
+        }
+
+        let hadExistingData = !snippetStore.snippets.isEmpty || !tagStore.tags.isEmpty
+
         Task {
-            await storageManager.updateStorageLocation(location)
-            await tagStore.loadTags()
-            await snippetStore.loadSnippets()
+            await storageManager.updateStorageLocation(location, customPath: customPath)
+
+            // If we're switching to a location that has nothing saved yet but
+            // we already have snippets/tags in memory, seed it with the
+            // current data instead of just showing an empty list — otherwise
+            // switching storage location looks like it wiped everything.
+            let destinationHasFile = await storageManager.hasExistingSnippetsFile()
+            if hadExistingData && !destinationHasFile {
+                await snippetStore.saveSnippets()
+                await tagStore.saveTags()
+            } else {
+                await tagStore.loadTags()
+                await snippetStore.loadSnippets()
+            }
         }
     }
 

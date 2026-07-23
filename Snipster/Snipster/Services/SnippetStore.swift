@@ -57,6 +57,12 @@ class SnippetStore: ObservableObject {
         await saveSnippets()
     }
 
+    /// Batched multi-delete — one save afterward instead of one per snippet.
+    func deleteSnippets(_ ids: Set<UUID>) async {
+        snippets.removeAll { ids.contains($0.id) }
+        await saveSnippets()
+    }
+
     func searchSnippets(query: String) -> [Snippet] {
         guard !query.isEmpty else { return snippets }
 
@@ -67,12 +73,16 @@ class SnippetStore: ObservableObject {
         }
     }
 
-    func exportSnippets(to url: URL) async throws {
+    /// Exports snippets and tags together in one file — tags are included so
+    /// that importing this backup elsewhere doesn't leave snippets with
+    /// orphaned tagIDs referencing tags that were never exported.
+    func exportSnippets(to url: URL, tags: [Tag]) async throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
 
-        let data = try encoder.encode(snippets)
+        let document = StorageDocument(snippets: snippets, tags: tags)
+        let data = try encoder.encode(document)
         try data.write(to: url, options: .atomic)
     }
 
@@ -88,10 +98,21 @@ class SnippetStore: ObservableObject {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
+        // Support both the current combined format and older snippets-only backups
+        // (a plain array, with no tag data) for backward compatibility.
+        let rawSnippets: [Snippet]
+        let importedTags: [Tag]
+        if let document = try? decoder.decode(StorageDocument.self, from: data) {
+            rawSnippets = document.snippets
+            importedTags = document.tags
+        } else {
+            rawSnippets = try decoder.decode([Snippet].self, from: data)
+            importedTags = []
+        }
+
         // Sanitize every imported snippet: clamp field lengths so a crafted file cannot
         // create pathological triggers/content that would degrade matching or the UI.
-        let importedSnippets = try decoder.decode([Snippet].self, from: data)
-            .map { $0.sanitized() }
+        let importedSnippets = rawSnippets.map { $0.sanitized() }
 
         var added = 0
         var updated = 0
@@ -122,7 +143,7 @@ class SnippetStore: ObservableObject {
 
         await saveSnippets()
 
-        let result = ImportResult(added: added, updated: updated, skipped: skipped, total: importedSnippets.count)
+        let result = ImportResult(added: added, updated: updated, skipped: skipped, total: importedSnippets.count, importedTags: importedTags)
         return result
     }
 
@@ -187,6 +208,9 @@ struct ImportResult {
     let updated: Int
     let skipped: Int
     let total: Int
+    /// Tags carried in the import file, if any — the caller merges these into
+    /// TagStore since SnippetStore has no visibility into tags on its own.
+    let importedTags: [Tag]
 
     var summary: String {
         return "Added: \(added), Updated: \(updated), Skipped: \(skipped), Total: \(total)"

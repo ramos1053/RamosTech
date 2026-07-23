@@ -8,28 +8,40 @@
 import Foundation
 
 actor FileStorageManager {
-    private let fileName = "snippets.json"
-    private let tagsFileName = "tags.json"
+    private let dataFileName = "snipster-library.json"
+
+    /// Pre-combined-file layout, kept only so an existing install's data can
+    /// be migrated forward on first load. Never written to going forward.
+    private let legacySnippetsFileName = "snippets.json"
+    private let legacyTagsFileName = "tags.json"
+
     private var storageLocation: StorageLocation
     private var customPath: URL?
 
-    /// Maximum size (bytes) for a snippets/tags JSON file we are willing to read into memory.
+    /// Maximum size (bytes) for a storage/import file we are willing to read into memory.
     /// Guards against memory-exhaustion from a maliciously large or corrupt file. 50 MB is far
     /// beyond any realistic snippet library.
     static let maxFileSize: Int = 50 * 1024 * 1024
 
-    private var fileURL: URL? {
+    private var dataFileURL: URL? {
         if let customPath = customPath {
-            return customPath.appendingPathComponent(fileName)
+            return customPath.appendingPathComponent(dataFileName)
         }
-        return storageLocation.defaultPath?.appendingPathComponent(fileName)
+        return storageLocation.defaultPath?.appendingPathComponent(dataFileName)
     }
 
-    private var tagsFileURL: URL? {
+    private var legacySnippetsFileURL: URL? {
         if let customPath = customPath {
-            return customPath.appendingPathComponent(tagsFileName)
+            return customPath.appendingPathComponent(legacySnippetsFileName)
         }
-        return storageLocation.defaultPath?.appendingPathComponent(tagsFileName)
+        return storageLocation.defaultPath?.appendingPathComponent(legacySnippetsFileName)
+    }
+
+    private var legacyTagsFileURL: URL? {
+        if let customPath = customPath {
+            return customPath.appendingPathComponent(legacyTagsFileName)
+        }
+        return storageLocation.defaultPath?.appendingPathComponent(legacyTagsFileName)
     }
 
     init(location: StorageLocation = .local, customPath: URL? = nil) {
@@ -38,75 +50,25 @@ actor FileStorageManager {
     }
 
     func loadSnippets() async throws -> [Snippet] {
-        guard let fileURL = fileURL else {
-            throw FileStorageError.invalidPath
-        }
-
-        // Create directory if needed
-        try createDirectoryIfNeeded(for: fileURL)
-
-        // If file doesn't exist, return empty array
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return []
-        }
-
-        let data = try readData(at: fileURL)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        return try decoder.decode([Snippet].self, from: data)
+        try migrateLegacyFilesIfNeeded()
+        return try readDocument().snippets
     }
 
     func saveSnippets(_ snippets: [Snippet]) async throws {
-        guard let fileURL = fileURL else {
-            throw FileStorageError.invalidPath
-        }
-
-        try createDirectoryIfNeeded(for: fileURL)
-
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-        let data = try encoder.encode(snippets)
-        try data.write(to: fileURL, options: .atomic)
-        setOwnerOnlyPermissions(at: fileURL)
+        var document = (try? readDocument()) ?? StorageDocument(snippets: [], tags: [])
+        document.snippets = snippets
+        try writeDocument(document)
     }
 
     func loadTags() async throws -> [Tag] {
-        guard let tagsFileURL = tagsFileURL else {
-            throw FileStorageError.invalidPath
-        }
-
-        // Create directory if needed
-        try createDirectoryIfNeeded(for: tagsFileURL)
-
-        // If file doesn't exist, return empty array
-        guard FileManager.default.fileExists(atPath: tagsFileURL.path) else {
-            return []
-        }
-
-        let data = try readData(at: tagsFileURL)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        return try decoder.decode([Tag].self, from: data)
+        try migrateLegacyFilesIfNeeded()
+        return try readDocument().tags
     }
 
     func saveTags(_ tags: [Tag]) async throws {
-        guard let tagsFileURL = tagsFileURL else {
-            throw FileStorageError.invalidPath
-        }
-
-        try createDirectoryIfNeeded(for: tagsFileURL)
-
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-        let data = try encoder.encode(tags)
-        try data.write(to: tagsFileURL, options: .atomic)
-        setOwnerOnlyPermissions(at: tagsFileURL)
+        var document = (try? readDocument()) ?? StorageDocument(snippets: [], tags: [])
+        document.tags = tags
+        try writeDocument(document)
     }
 
     func updateStorageLocation(_ location: StorageLocation, customPath: URL? = nil) async {
@@ -114,20 +76,76 @@ actor FileStorageManager {
         self.customPath = customPath
     }
 
-    func requestAccess(for location: StorageLocation) async -> Bool {
-        guard location.needsPermission else { return true }
+    /// Whether the current location already has a combined data file. Used
+    /// when switching locations to decide whether to seed a fresh/empty
+    /// destination with the current in-memory data, versus loading whatever
+    /// is already there (e.g. a custom folder already synced from another
+    /// machine).
+    func hasExistingSnippetsFile() -> Bool {
+        guard let dataFileURL else { return false }
+        return FileManager.default.fileExists(atPath: dataFileURL.path)
+    }
 
-        switch location {
-        case .iCloud:
-            // iCloud requires entitlement and container setup
-            return FileManager.default.url(forUbiquityContainerIdentifier: nil) != nil
-        case .oneDrive:
-            // OneDrive requires user to grant folder access
-            guard let path = location.defaultPath else { return false }
-            return FileManager.default.isReadableFile(atPath: path.path)
-        case .local:
-            return true
+    // MARK: - Combined document read/write
+
+    private func readDocument() throws -> StorageDocument {
+        guard let dataFileURL else {
+            throw FileStorageError.invalidPath
         }
+
+        try createDirectoryIfNeeded(for: dataFileURL)
+
+        guard FileManager.default.fileExists(atPath: dataFileURL.path) else {
+            return StorageDocument(snippets: [], tags: [])
+        }
+
+        let data = try readData(at: dataFileURL)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(StorageDocument.self, from: data)
+    }
+
+    private func writeDocument(_ document: StorageDocument) throws {
+        guard let dataFileURL else {
+            throw FileStorageError.invalidPath
+        }
+
+        try createDirectoryIfNeeded(for: dataFileURL)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+        let data = try encoder.encode(document)
+        try data.write(to: dataFileURL, options: .atomic)
+        setOwnerOnlyPermissions(at: dataFileURL)
+    }
+
+    // MARK: - Legacy migration
+
+    /// If the combined file doesn't exist yet at the current location but the
+    /// old separate snippets.json/tags.json do, merge them into the combined
+    /// format once. The legacy files are deliberately left in place afterward
+    /// — not deleted — as a safety net in case anything about the migration
+    /// or the new format turns out to be wrong.
+    private func migrateLegacyFilesIfNeeded() throws {
+        guard let dataFileURL else { return }
+        guard !FileManager.default.fileExists(atPath: dataFileURL.path) else { return }
+
+        let legacySnippets: [Snippet] = (try? readLegacyArray(at: legacySnippetsFileURL)) ?? []
+        let legacyTags: [Tag] = (try? readLegacyArray(at: legacyTagsFileURL)) ?? []
+
+        guard !legacySnippets.isEmpty || !legacyTags.isEmpty else { return }
+
+        try writeDocument(StorageDocument(snippets: legacySnippets, tags: legacyTags))
+    }
+
+    private func readLegacyArray<T: Decodable>(at url: URL?) throws -> [T] {
+        guard let url, FileManager.default.fileExists(atPath: url.path) else { return [] }
+        let data = try readData(at: url)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode([T].self, from: data)
     }
 
     private func createDirectoryIfNeeded(for fileURL: URL) throws {

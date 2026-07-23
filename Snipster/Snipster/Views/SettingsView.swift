@@ -329,7 +329,7 @@ struct SettingsView: View {
                                         .controlSize(.small)
                                     }
 
-                                    if let path = viewModel.storageLocation.defaultPath {
+                                    if let path = viewModel.resolvedStoragePath {
                                         Text(path.path)
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -388,7 +388,7 @@ struct SettingsView: View {
 
             Task {
                 do {
-                    try await viewModel.snippetStore.exportSnippets(to: url)
+                    try await viewModel.snippetStore.exportSnippets(to: url, tags: viewModel.tagStore.tags)
                 } catch {
                     // Export failed
                 }
@@ -407,7 +407,8 @@ struct SettingsView: View {
 
             Task {
                 do {
-                    _ = try await viewModel.snippetStore.importSnippets(from: url, mode: .merge)
+                    let result = try await viewModel.snippetStore.importSnippets(from: url, mode: .merge)
+                    await viewModel.tagStore.mergeTags(result.importedTags)
                 } catch {
                     // Import failed
                 }
