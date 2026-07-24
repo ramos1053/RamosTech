@@ -105,9 +105,7 @@ struct SnippetListView: View {
                         Button(snippet.isFavorite ? "Remove from Favorites" : "Add to Favorites") {
                             var updatedSnippet = snippet
                             updatedSnippet.toggleFavorite()
-                            Task {
-                                await viewModel.updateSnippet(updatedSnippet)
-                            }
+                            viewModel.updateSnippet(updatedSnippet)
                         }
 
                         Divider()

@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftUI
 import Combine
 
 @MainActor
@@ -177,8 +176,6 @@ class SnippetStore: ObservableObject {
 enum SnippetError: LocalizedError {
     case loadFailed(Error)
     case saveFailed(Error)
-    case invalidLocation
-    case exportFailed(Error)
     case importFailed(Error)
 
     var errorDescription: String? {
@@ -187,10 +184,6 @@ enum SnippetError: LocalizedError {
             return "Failed to load snippets: \(error.localizedDescription)"
         case .saveFailed(let error):
             return "Failed to save snippets: \(error.localizedDescription)"
-        case .invalidLocation:
-            return "Invalid storage location"
-        case .exportFailed(let error):
-            return "Failed to export snippets: \(error.localizedDescription)"
         case .importFailed(let error):
             return "Failed to import snippets: \(error.localizedDescription)"
         }

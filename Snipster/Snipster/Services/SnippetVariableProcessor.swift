@@ -165,7 +165,7 @@ nonisolated final class SnippetVariableProcessor: Sendable {
     /// `private`, so the test target can reach it via `@testable import`.
     func processClipboardHistoryVariables(
         _ content: String,
-        lookup: (Int) -> String? = { ClipboardHistoryService.shared.historyEntry(back: $0) }
+        lookup: (Int) -> String? = { ClipboardHistoryService.sharedUnsafe?.historyEntry(back: $0) }
     ) -> String {
         let pattern = #"\{\{CLIPBOARD:(\d+)\}\}"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return content }
@@ -182,6 +182,94 @@ nonisolated final class SnippetVariableProcessor: Sendable {
             let value = lookup(n) ?? ""
             let bounded = String(value.prefix(Self.maxClipboardLength))
             result.replaceSubrange(matchRange, with: bounded)
+        }
+
+        return result
+    }
+
+    // MARK: - Input Variables
+
+    /// Matches {{INPUT:DATE:label}} tokens specifically. Checked before the
+    /// plain pattern below, since that more general pattern would otherwise
+    /// capture "DATE:label" as a single (wrong) label.
+    private static let inputDatePattern = #"\{\{INPUT:DATE:([^{}]+)\}\}"#
+
+    /// Matches plain {{INPUT:label}} tokens. A label may not contain `{` or
+    /// `}`, so a malformed/empty token like {{INPUT:}} simply fails to match
+    /// and is left as literal text, matching how a non-numeric
+    /// {{CLIPBOARD:abc}} is handled above.
+    private static let inputPattern = #"\{\{INPUT:([^{}]+)\}\}"#
+
+    /// Distinct {{INPUT:...}} fields in content, in order of first
+    /// appearance, in order of first appearance across both token forms.
+    /// The same label appearing more than once is only listed once, since a
+    /// single popup field fills every occurrence of that label.
+    static func extractInputFields(from content: String) -> [InputField] {
+        struct RawMatch { let location: Int; let label: String; let kind: InputFieldKind }
+        var rawMatches: [RawMatch] = []
+
+        if let dateRegex = try? NSRegularExpression(pattern: inputDatePattern) {
+            for match in dateRegex.matches(in: content, range: NSRange(content.startIndex..., in: content)) {
+                guard match.numberOfRanges == 2,
+                      let labelRange = Range(match.range(at: 1), in: content) else { continue }
+                rawMatches.append(RawMatch(location: match.range.location, label: String(content[labelRange]), kind: .date))
+            }
+        }
+
+        if let plainRegex = try? NSRegularExpression(pattern: inputPattern) {
+            for match in plainRegex.matches(in: content, range: NSRange(content.startIndex..., in: content)) {
+                guard match.numberOfRanges == 2,
+                      let labelRange = Range(match.range(at: 1), in: content) else { continue }
+                let label = String(content[labelRange])
+                if label.hasPrefix("DATE:") { continue } // already captured above as a date field
+                rawMatches.append(RawMatch(location: match.range.location, label: label, kind: .text))
+            }
+        }
+
+        rawMatches.sort { $0.location < $1.location }
+
+        var seen = Set<String>()
+        var fields: [InputField] = []
+        for raw in rawMatches where !seen.contains(raw.label) {
+            seen.insert(raw.label)
+            fields.append(InputField(label: raw.label, kind: raw.kind))
+        }
+        return fields
+    }
+
+    /// Replaces every {{INPUT:label}} and {{INPUT:DATE:label}} occurrence
+    /// with `values[label]` — date fields are looked up by their plain
+    /// label, same as text fields, since the caller already formats the
+    /// picked date into a string before this is called. A label with no
+    /// matching value is left as-is (defensive — shouldn't happen in
+    /// practice, since the popup is always built from `extractInputFields`'
+    /// own output).
+    static func substituteInputValues(in content: String, values: [String: String]) -> String {
+        var result = content
+
+        if let dateRegex = try? NSRegularExpression(pattern: inputDatePattern) {
+            let matches = dateRegex.matches(in: result, range: NSRange(result.startIndex..., in: result))
+            for match in matches.reversed() {
+                guard match.numberOfRanges == 2,
+                      let matchRange = Range(match.range, in: result),
+                      let labelRange = Range(match.range(at: 1), in: result) else { continue }
+                let label = String(result[labelRange])
+                guard let value = values[label] else { continue }
+                result.replaceSubrange(matchRange, with: value)
+            }
+        }
+
+        if let plainRegex = try? NSRegularExpression(pattern: inputPattern) {
+            let matches = plainRegex.matches(in: result, range: NSRange(result.startIndex..., in: result))
+            for match in matches.reversed() {
+                guard match.numberOfRanges == 2,
+                      let matchRange = Range(match.range, in: result),
+                      let labelRange = Range(match.range(at: 1), in: result) else { continue }
+                let label = String(result[labelRange])
+                if label.hasPrefix("DATE:") { continue } // already substituted above
+                guard let value = values[label] else { continue }
+                result.replaceSubrange(matchRange, with: value)
+            }
         }
 
         return result
@@ -207,4 +295,16 @@ nonisolated final class SnippetVariableProcessor: Sendable {
 
         return result
     }
+}
+
+/// What kind of control a {{INPUT:...}} field should show in the popup.
+enum InputFieldKind: Equatable {
+    case text
+    case date
+}
+
+/// One field to prompt for — a label plus which control renders it.
+struct InputField: Equatable {
+    let label: String
+    let kind: InputFieldKind
 }

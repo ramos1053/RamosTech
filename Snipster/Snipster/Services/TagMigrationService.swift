@@ -15,12 +15,10 @@ actor TagMigrationService {
     /// Returns migrated snippets
     func migrateSnippetsToTagIDs(snippets: [Snippet], tagStore: TagStore) async -> [Snippet] {
         var migratedSnippets: [Snippet] = []
-        var needsMigration = false
 
         for var snippet in snippets {
             // Only migrate if snippet has string tags but no tagIDs
             if snippet.tagIDs.isEmpty && !snippet.tags.isEmpty {
-                needsMigration = true
                 var tagIDs: [UUID] = []
 
                 for tagName in snippet.tags {
@@ -33,7 +31,7 @@ actor TagMigrationService {
                     } else {
                         // Create new tag with default color
                         let currentTags = await tagStore.tags
-                        let newTag = Tag(
+                        let newTag = await Tag(
                             name: tagName,
                             color: TagColorPalette.nextColor(existingTags: currentTags)
                         )

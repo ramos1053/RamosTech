@@ -118,36 +118,6 @@ class DetailWindow: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-// Custom window that dismisses when clicking outside
-class DismissableWindow: NSWindow {
-    override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType, defer flag: Bool) {
-        super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
-        setupDismissOnClickOutside()
-    }
-
-    convenience init(contentViewController: NSViewController) {
-        self.init(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        self.contentViewController = contentViewController
-    }
-
-    private func setupDismissOnClickOutside() {
-        // Monitor for clicks outside the window
-        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            guard let self = self, self.isVisible else { return event }
-
-            let windowFrame = self.frame
-            let screenClickLocation = NSEvent.mouseLocation
-
-            // Check if click is outside window bounds
-            if !windowFrame.contains(screenClickLocation) {
-                self.close()
-            }
-
-            return event
-        }
-    }
-}
-
 // Singleton to manage window references
 class WindowManager {
     static let shared = WindowManager()
@@ -168,7 +138,15 @@ class WindowManager {
             object: window,
             queue: .main
         ) { [weak self] notification in
-            if let closedWindow = notification.object as? NSWindow {
+            // Extracted before entering the isolated block below: Notification
+            // itself isn't Sendable, so pulling the NSWindow out here (a plain
+            // cast, no actor-isolated state touched) avoids sending a
+            // non-Sendable value across the isolation boundary.
+            guard let closedWindow = notification.object as? NSWindow else { return }
+            // NotificationCenter's closure type isn't statically @MainActor
+            // even with queue: .main — but queue: .main guarantees this body
+            // only ever runs on the main thread, so assumeIsolated is safe.
+            MainActor.assumeIsolated {
                 self?.windows.removeAll { $0 == closedWindow }
             }
         }

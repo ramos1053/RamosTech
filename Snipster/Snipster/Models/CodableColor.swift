@@ -12,7 +12,11 @@ extension Color: @retroactive Codable {
         case red, green, blue, opacity
     }
 
-    public init(from decoder: Decoder) throws {
+    // nonisolated — Tag (a nonisolated Codable model) decodes/encodes its
+    // Color property from FileStorageManager's own (non-MainActor)
+    // actor-isolated context; NSColor conversion here is pure computation,
+    // no reason to default to MainActor like the rest of the module.
+    public nonisolated init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let red = try container.decode(Double.self, forKey: .red)
         let green = try container.decode(Double.self, forKey: .green)
@@ -22,7 +26,7 @@ extension Color: @retroactive Codable {
         self.init(red: red, green: green, blue: blue, opacity: opacity)
     }
 
-    public func encode(to encoder: Encoder) throws {
+    public nonisolated func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         // Extract RGB components from Color using NSColor on macOS

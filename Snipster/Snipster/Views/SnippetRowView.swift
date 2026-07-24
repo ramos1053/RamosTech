@@ -76,9 +76,7 @@ struct SnippetRowView: View {
     private func toggleFavorite() {
         var updatedSnippet = snippet
         updatedSnippet.toggleFavorite()
-        Task {
-            await viewModel.updateSnippet(updatedSnippet)
-        }
+        viewModel.updateSnippet(updatedSnippet)
     }
 }
 

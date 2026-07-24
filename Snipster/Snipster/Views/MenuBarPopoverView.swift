@@ -9,7 +9,6 @@ import SwiftUI
 
 struct MenuBarPopoverView: View {
     @EnvironmentObject var viewModel: SnippetViewModel
-    @EnvironmentObject var tagStore: TagStore
     @FocusState private var searchFieldFocused: Bool
     @State private var selectedTag: Tag? = nil
     @State private var sortOption: SortOption = .title

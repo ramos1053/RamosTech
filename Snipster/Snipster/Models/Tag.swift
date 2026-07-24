@@ -8,7 +8,10 @@
 import Foundation
 import SwiftUI
 
-struct Tag: Identifiable, Codable, Equatable, Hashable {
+// nonisolated — pure data, decoded/encoded from FileStorageManager's own
+// (non-MainActor) actor-isolated context; no reason for its Codable
+// conformance to default to MainActor like the rest of the module.
+nonisolated struct Tag: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
     var name: String
     var color: Color

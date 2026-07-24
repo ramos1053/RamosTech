@@ -1,12 +1,12 @@
 # Snipster
 
-Version 1.3
+Version 1.3.1
 
-A macOS menu bar app for managing and expanding text snippets — keyboard triggers, dynamic variables, tag-based organization, a bounded clipboard history, and a Spotlight-style quick-access window you can summon from anywhere with a global hotkey.
+A macOS menu bar app for managing and expanding text snippets — keyboard triggers, dynamic variables, fill-in template prompts, tag-based organization, a bounded clipboard history, and a Spotlight-style quick-access window you can summon from anywhere with a global hotkey.
 
-## What changed in 1.3
+## What changed in 1.3.1
 
-You can now select multiple snippets at once — via checkbox, in either the menu bar list or the quick-access window — and delete them together. Storage location is a plain folder picker now instead of separate iCloud/OneDrive options that depended on an entitlement that, it turns out, was never actually wired up correctly; point it at any folder you can navigate to, and the choice actually survives a relaunch this time. Snippets and tags are combined into a single file, so exporting a backup no longer leaves tags behind. The tag filter in the menu bar popover is a compact dropdown now instead of a horizontal-scrolling row of pills. Full details are in [CHANGELOG.md](CHANGELOG.md).
+Snippets can now pause expansion and ask for values instead of only substituting automatic variables — a new `{{INPUT:label}}` token pops a small window with one field per distinct label, turning a snippet into a real fill-in-the-blank template. Any field that looks like it wants a name, email, phone number, or company can be filled straight from a contact, via a small button beside the field that opens a proper contact-picker window. This release also fixes a handful of real bugs found while building that (blank fields pasting literal `{{INPUT:...}}` tags, a paste that could silently fail after submitting the popup, two icon buttons with a dead-zone in their clickable area, a mis-centered alert) and finishes removing the old iCloud/OneDrive-specific storage code left over from 1.3. Full details are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Quick access
 
@@ -31,6 +31,12 @@ Snippets expand via clipboard-based insertion, triggered by a prefix-plus-keywor
 ## Dynamic variables
 
 Snippets can embed live content: date variables (`{{DATE}}`, `{{DATE:LONG}}`, `{{DATE:CUSTOM:yyyy-MM-dd}}` and similar), time variables (`{{TIME}}`, `{{TIME:24}}`), `{{CLIPBOARD}}` for whatever's currently copied (or `{{CLIPBOARD:2}}`, `{{CLIPBOARD:3}}`, and so on to reach further back into clipboard history), `{{USERNAME}}` / `{{USER}}` / `{{HOSTNAME}}` for system info, and `{{CURSOR}}` to place the cursor at a specific spot after expansion.
+
+## Fill-in template variables
+
+`{{INPUT:label}}` turns a snippet into a fill-in-the-blank template: expansion pauses and a small window pops up with one field per distinct label (the same label used twice only asks once and fills both spots), Tab moves between fields, and Return on the last one submits — Escape cancels, leaving the already-deleted trigger un-replaced, same as clicking outside the window. A field can also be typed with a date-shaped label to get a compact date field with an inline calendar picker instead of a plain text box.
+
+Any field whose label looks like it wants a name, email address, phone number, or company — `Client Name`, `Contact Email`, `Company`, and similar — gets a small contact-picker button beside it. Tapping it opens a searchable window over the macOS Contacts database and fills just that one field from whichever contact is picked, leaving every other field in the form untouched and still editable by hand.
 
 For example:
 
@@ -92,7 +98,9 @@ Globally, `Cmd+Shift+S` opens the Spotlight-style search (customizable) and `Cmd
 
 `SnippetStore` handles persistence and CRUD, `TagStore` manages the tag library and colors, `TextExpansionMonitor` watches keyboard input for triggers with thread-safe handling, `HotkeyManager` registers the global hotkey through Carbon's `RegisterEventHotKey` with conflict detection built in, and `FileStorageManager` persists everything to a single combined file (`StorageDocument`, `snipster-library.json`) across whichever location you've picked — local or a custom folder — migrating an older two-file install automatically the first time it loads. `CopyPathService` registers Snipster as a Finder Services provider for Copy Path and gates it on the Settings toggle. `ClipboardHistoryService` polls the pasteboard for changes and owns the in-memory ring buffer (`ClipboardHistoryBuffer`), which is covered by unit tests in `SnipsterTests`. On the UI side, `SpotlightWindow` is a custom `NSPanel` that remembers its position, and `MenuBarPopoverView` is the main list/search/filter interface.
 
-The stack is SwiftUI for the UI, Combine for state management, AppKit for window handling, Carbon for the legacy global-hotkey APIs, and CoreGraphics for simulating keyboard events during expansion.
+`{{INPUT:label}}` parsing/substitution lives in `SnippetVariableProcessor`, and the popup itself is `TemplateInputWindow` — a borderless floating panel sized to its content's real, AppKit-measured height rather than a fixed guess, positioned near the cursor with a top-center screen fallback when there isn't room. `ContactAutofillService` classifies a field label against a contact property using a plain word-list heuristic and wraps the synchronous `CNContactStore` lookups; `ContactPickerWindow` gives that lookup its own standalone, resizable window rather than trying to fit a contact list into the template popup. `InfoAlertWindow` is a custom, centered replacement for `NSAlert` used for the Copy Path disabled notice.
+
+The stack is SwiftUI for the UI, Combine for state management, AppKit for window handling, Carbon for the legacy global-hotkey APIs, Contacts for the autofill lookup, and CoreGraphics for simulating keyboard events during expansion. The whole codebase builds warning-free under Swift's strict concurrency checking (`SWIFT_STRICT_CONCURRENCY = complete`).
 
 ## Acknowledgments
 

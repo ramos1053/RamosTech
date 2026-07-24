@@ -185,21 +185,12 @@ actor FileStorageManager {
 
 enum FileStorageError: LocalizedError {
     case invalidPath
-    case accessDenied
-    case encodingFailed
-    case decodingFailed
     case fileTooLarge
 
     var errorDescription: String? {
         switch self {
         case .invalidPath:
             return "Invalid storage path"
-        case .accessDenied:
-            return "Access denied to storage location"
-        case .encodingFailed:
-            return "Failed to encode snippets"
-        case .decodingFailed:
-            return "Failed to decode snippets"
         case .fileTooLarge:
             return "Storage file is too large to read safely"
         }

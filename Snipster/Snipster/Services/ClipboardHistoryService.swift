@@ -15,6 +15,19 @@ import Combine
 final class ClipboardHistoryService: NSObject, ObservableObject {
     static let shared = ClipboardHistoryService()
 
+    /// A nonisolated mirror of `shared`, populated once at the end of
+    /// init() below. `shared` itself can't be marked nonisolated — its
+    /// initializer is MainActor-isolated (same as any other member here, and
+    /// init() also schedules a Timer, which genuinely needs to happen on a
+    /// thread with a run loop) — but SnippetVariableProcessor's nonisolated
+    /// default lookup closure needs to reach the singleton from a background
+    /// dispatch queue (TextExpansionMonitor's expansion path), where
+    /// `MainActor.assumeIsolated` would be unsafe to use. SnipsterApp.swift
+    /// eagerly touches `.shared` at launch on the main thread, well before
+    /// any expansion trigger could fire, so by the time nonisolated code
+    /// ever reads this, it's already populated.
+    nonisolated(unsafe) static private(set) var sharedUnsafe: ClipboardHistoryService?
+
     private static let enabledKey = "snipster.clipboardHistory.enabled"
     private static let limitKey = "snipster.clipboardHistory.limit"
     private static let wipeIntervalKey = "snipster.clipboardHistory.wipeInterval"
@@ -121,6 +134,7 @@ final class ClipboardHistoryService: NSObject, ObservableObject {
         buffer = ClipboardHistoryBuffer(capacity: limit)
         lastChangeCount = NSPasteboard.general.changeCount
         super.init()
+        Self.sharedUnsafe = self
 
         if isEnabled {
             startPolling()

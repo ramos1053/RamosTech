@@ -5,7 +5,7 @@
 //  Created by RamosTech on 12/16/25.
 //
 
-import SwiftUI
+import Foundation
 import Combine
 
 @MainActor
