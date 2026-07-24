@@ -9,7 +9,11 @@ import Foundation
 /// dependencies — kept separate from `ClipboardHistoryService` so the
 /// insert/dedup/trim behavior is directly unit-testable without touching
 /// `NSPasteboard` or a `Timer`.
-struct ClipboardHistoryBuffer {
+// nonisolated — matches the doc comment above: pure logic with no AppKit or
+// system dependencies, meant to be directly unit-testable without any actor
+// context. It was still implicitly defaulting to MainActor under the
+// module's default isolation, contradicting that design.
+nonisolated struct ClipboardHistoryBuffer {
     private(set) var entries: [ClipboardHistoryEntry] = []
     var capacity: Int
 

@@ -26,9 +26,4 @@ struct TagColorPalette {
         let index = existingTags.count % defaultColors.count
         return defaultColors[index]
     }
-
-    /// Returns a random color from the palette
-    static func randomColor() -> Color {
-        defaultColors.randomElement() ?? .blue
-    }
 }

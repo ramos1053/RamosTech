@@ -12,7 +12,12 @@ import AppKit
 /// A Spotlight-style floating window for quick snippet search
 /// Similar to Clipy's popup menu interface
 class SpotlightWindow: NSPanel {
-    private var clickOutsideMonitor: Any?
+    // nonisolated(unsafe) — deinit (always nonisolated for a class) needs to
+    // remove this monitor; it's otherwise only ever touched from
+    // MainActor-isolated setup code, and deinit only runs once the last
+    // reference is gone, so there's no real concurrent access to guard
+    // against.
+    nonisolated(unsafe) private var clickOutsideMonitor: Any?
     private static let positionKey = "SpotlightWindowPosition"
 
     convenience init(contentViewController: NSViewController) {
@@ -72,27 +77,6 @@ class SpotlightWindow: NSPanel {
         makeFirstResponder(contentView)
     }
 
-    /// Show window near the current cursor position
-    func showNearCursor() {
-        let mouseLocation = NSEvent.mouseLocation
-        let windowFrame = frame
-
-        var x = mouseLocation.x - (windowFrame.width / 2)
-        var y = mouseLocation.y - 50 // Below cursor
-
-        // Ensure window stays on screen
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
-            x = max(screenFrame.minX, min(x, screenFrame.maxX - windowFrame.width))
-            y = max(screenFrame.minY, min(y, screenFrame.maxY - windowFrame.height))
-        }
-
-        setFrameOrigin(NSPoint(x: x, y: y))
-
-        makeKeyAndOrderFront(nil)
-        makeFirstResponder(contentView)
-    }
-
     /// Dismiss the window
     func dismiss() {
         // Save position before dismissing
@@ -108,7 +92,12 @@ class SpotlightWindow: NSPanel {
             object: self,
             queue: .main
         ) { [weak self] _ in
-            self?.savePosition()
+            // NotificationCenter's closure type isn't statically @MainActor
+            // even with queue: .main — but queue: .main guarantees this body
+            // only ever runs on the main thread, so assumeIsolated is safe.
+            MainActor.assumeIsolated {
+                self?.savePosition()
+            }
         }
     }
 

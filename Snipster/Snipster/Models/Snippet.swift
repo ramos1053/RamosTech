@@ -7,7 +7,10 @@
 
 import Foundation
 
-struct Snippet: Identifiable, Codable, Equatable, Sendable {
+// nonisolated — pure Sendable data, decoded/encoded from FileStorageManager's
+// own (non-MainActor) actor-isolated context; no reason for its Codable
+// conformance to default to MainActor like the rest of the module.
+nonisolated struct Snippet: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var title: String
     var content: String

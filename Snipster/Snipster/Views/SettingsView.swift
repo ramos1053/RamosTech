@@ -15,15 +15,9 @@ struct SettingsView: View {
     @StateObject private var hotkeyManager = HotkeyManager.shared
     @StateObject private var copyPathService = CopyPathService.shared
     @StateObject private var clipboardHistory = ClipboardHistoryService.shared
-    @StateObject private var hotkeyRecorder = HotkeyRecorderViewModel()
     @ObservedObject private var appSettings = AppSettings.shared
     @State private var launchAtLogin: Bool = false
-
-    private func closeWindow() {
-        if let window = NSApplication.shared.keyWindow {
-            window.close()
-        }
-    }
+    @State private var showHotkeyPicker = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -66,44 +60,13 @@ struct SettingsView: View {
                                             .background(Color.accentColor.opacity(0.1))
                                             .cornerRadius(4)
                                         Spacer()
-                                        Button("Record New") {
-                                            hotkeyRecorder.startRecording()
+                                        Button("Choose Hotkey…") {
+                                            showHotkeyPicker = true
                                         }
                                         .buttonStyle(.bordered)
                                         .controlSize(.small)
-                                        .disabled(hotkeyRecorder.isRecording)
-                                    }
-
-                                    if hotkeyRecorder.isRecording {
-                                        HStack {
-                                            ProgressView()
-                                                .scaleEffect(0.7)
-                                                .frame(width: 16, height: 16)
-                                            Text("Press a key combination...")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    } else if let error = hotkeyRecorder.errorMessage {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "exclamationmark.triangle.fill")
-                                                .foregroundColor(.orange)
-                                            Text(error)
-                                                .font(.caption)
-                                                .foregroundColor(.orange)
-                                        }
-                                    } else if hotkeyRecorder.recordedKeyCode != nil {
-                                        HStack {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(.green)
-                                            Text("New hotkey recorded")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                            Spacer()
-                                            Button("Apply") {
-                                                try? hotkeyRecorder.applyRecordedHotkey()
-                                            }
-                                            .buttonStyle(.borderedProminent)
-                                            .controlSize(.small)
+                                        .popover(isPresented: $showHotkeyPicker) {
+                                            HotkeyPickerView(isPresented: $showHotkeyPicker, hotkeyManager: hotkeyManager)
                                         }
                                     }
                                 }

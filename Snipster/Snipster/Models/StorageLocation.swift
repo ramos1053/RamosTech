@@ -9,10 +9,10 @@ import Foundation
 
 enum StorageLocation: String, Codable, CaseIterable, Identifiable {
     case local = "Local Folder"
-    /// A folder the user picked directly via NSOpenPanel. Works for iCloud
-    /// Drive, OneDrive, Google Drive, Dropbox, or any external volume — it's
-    /// just a folder, so no service-specific detection or entitlements are
-    /// needed. The actual chosen path is tracked separately (see
+    /// A folder the user picked directly via NSOpenPanel. Works for any
+    /// cloud-synced folder or external volume — it's just a folder, so no
+    /// service-specific detection or entitlements are needed. The actual
+    /// chosen path is tracked separately (see
     /// SnippetViewModel.customStoragePath), not on this case, matching how
     /// FileStorageManager already separates `storageLocation` from `customPath`.
     case custom = "Custom Folder"
@@ -20,8 +20,11 @@ enum StorageLocation: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     /// Only meaningful for `.local` — `.custom`'s path is whatever the user
-    /// picked, not something this enum can compute on its own.
-    var defaultPath: URL? {
+    /// picked, not something this enum can compute on its own. `nonisolated`
+    /// because FileStorageManager (a plain, non-MainActor actor) reads this
+    /// from its own isolated context — pure computation over FileManager, no
+    /// reason for it to default to MainActor like the rest of the module.
+    nonisolated var defaultPath: URL? {
         switch self {
         case .local:
             return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?

@@ -8,7 +8,6 @@
 import Foundation
 import Combine
 import Carbon
-import AppKit
 
 /// Manages global hotkey registration and conflict detection
 /// Uses Carbon APIs for hotkey registration (similar to KeyboardShortcuts library)
@@ -40,7 +39,12 @@ class HotkeyManager: ObservableObject {
     @Published var currentModifiers: UInt32
 
     private var hotKeyRef: EventHotKeyRef?
-    private var eventHandler: EventHandlerRef?
+    // nonisolated(unsafe) — deinit (always nonisolated for a class) needs to
+    // release this Carbon handle; in practice it's only ever otherwise
+    // touched from MainActor-isolated registration code, and deinit only
+    // runs once the last reference is gone, so there's no real concurrent
+    // access to guard against.
+    nonisolated(unsafe) private var eventHandler: EventHandlerRef?
 
     private init() {
         // Load saved preferences
@@ -91,7 +95,7 @@ class HotkeyManager: ObservableObject {
         // Unregister existing hotkey first
         unregisterHotkey()
 
-        var hotKeyID = EventHotKeyID(signature: OSType(0x53415253), id: 1) // 'SARS' signature
+        let hotKeyID = EventHotKeyID(signature: OSType(0x53415253), id: 1) // 'SARS' signature
         let modifiers = currentModifiers
 
         // Use GetApplicationEventTarget() which works globally
@@ -228,17 +232,7 @@ class HotkeyManager: ObservableObject {
     }
 
     private func keyCodeToString(_ keyCode: UInt32) -> String {
-        // Map common key codes to characters
-        let keyMap: [UInt32: String] = [
-            0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X",
-            8: "C", 9: "V", 11: "B", 12: "Q", 13: "W", 14: "E", 15: "R",
-            16: "Y", 17: "T", 31: "O", 32: "U", 34: "I", 35: "P",
-            37: "L", 38: "J", 40: "K", 45: "N", 46: "M",
-            49: "Space", 48: "Tab", 51: "Delete", 53: "Escape",
-            36: "Return", 76: "Enter"
-        ]
-
-        return keyMap[keyCode] ?? "Key \(keyCode)"
+        return HotkeyKeyCatalog.allKeysByCode[keyCode] ?? "Key \(keyCode)"
     }
 
     // MARK: - Cleanup
@@ -265,86 +259,75 @@ enum HotkeyError: LocalizedError {
     }
 }
 
-// MARK: - Hotkey Recorder View Model
+// MARK: - Key Catalog
 
-/// View model for recording hotkeys in the UI
-@MainActor
-class HotkeyRecorderViewModel: ObservableObject {
-    @Published var isRecording = false
-    @Published var recordedKeyCode: UInt32?
-    @Published var recordedModifiers: UInt32?
-    @Published var errorMessage: String?
+/// One selectable key in the hotkey picker.
+struct HotkeyKeyOption: Identifiable, Hashable {
+    let id: UInt32
+    let label: String
+}
 
-    private var eventMonitor: Any?
+/// The fixed set of keys offered by the hotkey picker, grouped for display.
+/// Built from Carbon's kVK_* virtual keycode constants (the same values
+/// RegisterEventHotKey expects) rather than live keypress capture — a
+/// picker needs no Accessibility/Input Monitoring permission and isn't
+/// subject to window-focus or event-routing quirks the way capturing a raw
+/// NSEvent keyDown is.
+enum HotkeyKeyCatalog {
+    static let letters: [HotkeyKeyOption] = [
+        .init(id: UInt32(kVK_ANSI_A), label: "A"), .init(id: UInt32(kVK_ANSI_B), label: "B"),
+        .init(id: UInt32(kVK_ANSI_C), label: "C"), .init(id: UInt32(kVK_ANSI_D), label: "D"),
+        .init(id: UInt32(kVK_ANSI_E), label: "E"), .init(id: UInt32(kVK_ANSI_F), label: "F"),
+        .init(id: UInt32(kVK_ANSI_G), label: "G"), .init(id: UInt32(kVK_ANSI_H), label: "H"),
+        .init(id: UInt32(kVK_ANSI_I), label: "I"), .init(id: UInt32(kVK_ANSI_J), label: "J"),
+        .init(id: UInt32(kVK_ANSI_K), label: "K"), .init(id: UInt32(kVK_ANSI_L), label: "L"),
+        .init(id: UInt32(kVK_ANSI_M), label: "M"), .init(id: UInt32(kVK_ANSI_N), label: "N"),
+        .init(id: UInt32(kVK_ANSI_O), label: "O"), .init(id: UInt32(kVK_ANSI_P), label: "P"),
+        .init(id: UInt32(kVK_ANSI_Q), label: "Q"), .init(id: UInt32(kVK_ANSI_R), label: "R"),
+        .init(id: UInt32(kVK_ANSI_S), label: "S"), .init(id: UInt32(kVK_ANSI_T), label: "T"),
+        .init(id: UInt32(kVK_ANSI_U), label: "U"), .init(id: UInt32(kVK_ANSI_V), label: "V"),
+        .init(id: UInt32(kVK_ANSI_W), label: "W"), .init(id: UInt32(kVK_ANSI_X), label: "X"),
+        .init(id: UInt32(kVK_ANSI_Y), label: "Y"), .init(id: UInt32(kVK_ANSI_Z), label: "Z"),
+    ]
 
-    func startRecording() {
-        isRecording = true
-        recordedKeyCode = nil
-        recordedModifiers = nil
-        errorMessage = nil
+    static let numbers: [HotkeyKeyOption] = [
+        .init(id: UInt32(kVK_ANSI_0), label: "0"), .init(id: UInt32(kVK_ANSI_1), label: "1"),
+        .init(id: UInt32(kVK_ANSI_2), label: "2"), .init(id: UInt32(kVK_ANSI_3), label: "3"),
+        .init(id: UInt32(kVK_ANSI_4), label: "4"), .init(id: UInt32(kVK_ANSI_5), label: "5"),
+        .init(id: UInt32(kVK_ANSI_6), label: "6"), .init(id: UInt32(kVK_ANSI_7), label: "7"),
+        .init(id: UInt32(kVK_ANSI_8), label: "8"), .init(id: UInt32(kVK_ANSI_9), label: "9"),
+    ]
 
-        // Monitor for key presses
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleKeyPress(event)
-            return nil // Consume the event
-        }
-    }
+    static let functionKeys: [HotkeyKeyOption] = [
+        .init(id: UInt32(kVK_F1), label: "F1"), .init(id: UInt32(kVK_F2), label: "F2"),
+        .init(id: UInt32(kVK_F3), label: "F3"), .init(id: UInt32(kVK_F4), label: "F4"),
+        .init(id: UInt32(kVK_F5), label: "F5"), .init(id: UInt32(kVK_F6), label: "F6"),
+        .init(id: UInt32(kVK_F7), label: "F7"), .init(id: UInt32(kVK_F8), label: "F8"),
+        .init(id: UInt32(kVK_F9), label: "F9"), .init(id: UInt32(kVK_F10), label: "F10"),
+        .init(id: UInt32(kVK_F11), label: "F11"), .init(id: UInt32(kVK_F12), label: "F12"),
+    ]
 
-    func stopRecording() {
-        isRecording = false
+    static let specialKeys: [HotkeyKeyOption] = [
+        .init(id: UInt32(kVK_Space), label: "Space"),
+        .init(id: UInt32(kVK_Tab), label: "Tab"),
+        .init(id: UInt32(kVK_Return), label: "Return"),
+        .init(id: UInt32(kVK_Delete), label: "Delete"),
+        .init(id: UInt32(kVK_ForwardDelete), label: "Forward Delete"),
+        .init(id: UInt32(kVK_Escape), label: "Escape"),
+        .init(id: UInt32(kVK_LeftArrow), label: "Left Arrow"),
+        .init(id: UInt32(kVK_RightArrow), label: "Right Arrow"),
+        .init(id: UInt32(kVK_UpArrow), label: "Up Arrow"),
+        .init(id: UInt32(kVK_DownArrow), label: "Down Arrow"),
+    ]
 
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-            eventMonitor = nil
-        }
-    }
+    static let groups: [(name: String, keys: [HotkeyKeyOption])] = [
+        ("Letters", letters),
+        ("Numbers", numbers),
+        ("Function Keys", functionKeys),
+        ("Special Keys", specialKeys),
+    ]
 
-    private func handleKeyPress(_ event: NSEvent) {
-        let keyCode = event.keyCode
-        let flags = event.modifierFlags
-
-        // Convert NSEvent modifiers to Carbon modifiers
-        var carbonModifiers: UInt32 = 0
-
-        if flags.contains(.command) {
-            carbonModifiers |= UInt32(cmdKey)
-        }
-        if flags.contains(.control) {
-            carbonModifiers |= UInt32(controlKey)
-        }
-        if flags.contains(.option) {
-            carbonModifiers |= UInt32(optionKey)
-        }
-        if flags.contains(.shift) {
-            carbonModifiers |= UInt32(shiftKey)
-        }
-
-        // Require at least one modifier
-        guard carbonModifiers != 0 else {
-            errorMessage = "Please use at least one modifier key (⌘, ⌃, ⌥, or ⇧)"
-            return
-        }
-
-        // Check for conflicts
-        if let conflict = HotkeyManager.shared.checkForConflicts(keyCode: UInt32(keyCode), modifiers: carbonModifiers) {
-            errorMessage = "Conflicts with \(conflict)"
-            return
-        }
-
-        // Valid hotkey recorded
-        recordedKeyCode = UInt32(keyCode)
-        recordedModifiers = carbonModifiers
-        errorMessage = nil
-
-        stopRecording()
-    }
-
-    func applyRecordedHotkey() throws {
-        guard let keyCode = recordedKeyCode,
-              let modifiers = recordedModifiers else {
-            throw HotkeyError.conflict("No hotkey recorded")
-        }
-
-        try HotkeyManager.shared.updateHotkey(keyCode: keyCode, modifiers: modifiers)
-    }
+    static let allKeysByCode: [UInt32: String] = Dictionary(
+        uniqueKeysWithValues: (letters + numbers + functionKeys + specialKeys).map { ($0.id, $0.label) }
+    )
 }

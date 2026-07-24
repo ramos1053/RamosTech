@@ -24,15 +24,7 @@ struct StorageLocationPicker: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.prompt = "Choose"
-        panel.message = "Choose a folder to store your Snipster data — iCloud Drive, OneDrive, Google Drive, Dropbox, or any external volume all work, since this is just a regular folder."
-
-        // Default to iCloud Drive's Documents folder if it exists, since
-        // that's the most common reason someone reaches for a custom folder.
-        if let iCloudDocuments = FileManager.default.url(forUbiquityContainerIdentifier: nil)?
-            .appendingPathComponent("Documents"),
-           FileManager.default.fileExists(atPath: iCloudDocuments.path) {
-            panel.directoryURL = iCloudDocuments
-        }
+        panel.message = "Choose a folder to store your Snipster data — any folder you can navigate to works, including cloud-synced folders or an external volume."
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
@@ -77,7 +69,7 @@ struct StorageLocationPicker: View {
             }
             .buttonStyle(.plain)
 
-            Text("A custom folder works for anything you can navigate to in the picker — iCloud Drive, OneDrive, Google Drive, Dropbox, or an external drive.")
+            Text("A custom folder works for anything you can navigate to in the picker, including cloud-synced folders or an external drive.")
                 .font(.caption)
                 .foregroundColor(.secondary)
 

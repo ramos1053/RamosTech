@@ -39,8 +39,8 @@ final class CopyPathService: NSObject, ObservableObject {
     @objc func copyPath(_ pboard: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString>) {
         guard isEnabled else {
             error.pointee = "Copy Path is disabled. Enable it in Snipster's Settings > Finder Integration." as NSString
-            showAlert(message: "Copy Path is Disabled",
-                      informativeText: "Enable \"Copy Path\" in Finder from Snipster's Settings > Finder Integration to use this action.")
+            InfoAlertWindow.show(title: "Copy Path is Disabled",
+                                  message: "Enable \"Copy Path\" in Finder from Snipster's Settings > Finder Integration to use this action.")
             return
         }
 
@@ -56,15 +56,5 @@ final class CopyPathService: NSObject, ObservableObject {
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(paths, forType: .string)
-    }
-
-    private func showAlert(message: String, informativeText: String) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = message
-        alert.informativeText = informativeText
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
     }
 }

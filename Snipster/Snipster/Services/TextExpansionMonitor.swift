@@ -7,7 +7,6 @@
 
 import Foundation
 import AppKit
-import Carbon
 import Combine
 
 @MainActor
@@ -213,7 +212,10 @@ class TextExpansionMonitor: ObservableObject {
             DispatchQueue.global(qos: .userInitiated).async {
                 Thread.sleep(forTimeInterval: 0.05)
                 self.expandSnippetSync(matchedSnippet, triggerLength: charsToDelete)
-                self.isExpanding = false
+                // isExpanding is cleared inside expandSnippetSync/finishExpansion now,
+                // not unconditionally here — a snippet with {{INPUT:...}} tokens needs
+                // to stay "expanding" until its popup resolves, which can happen well
+                // after this dispatched block returns.
             }
             return Unmanaged.passRetained(event)
         }
@@ -254,8 +256,35 @@ class TextExpansionMonitor: ObservableObject {
             Thread.sleep(forTimeInterval: 0.1)
         }
 
+        // {{INPUT:...}} tokens pause expansion to ask for values via a popup.
+        // Snippets without any (the common case) take the fast, unchanged path.
+        let inputFields = SnippetVariableProcessor.extractInputFields(from: snippet.content)
+        guard !inputFields.isEmpty else {
+            finishExpansion(snippet.content)
+            return
+        }
+
+        DispatchQueue.main.async {
+            TemplateInputWindowManager.shared.show(fields: inputFields) { [weak self] values in
+                guard let self else { return }
+                guard let values else {
+                    // Cancelled — the trigger stays deleted, nothing pastes.
+                    self.isExpanding = false
+                    return
+                }
+                let filled = SnippetVariableProcessor.substituteInputValues(in: snippet.content, values: values)
+                self.finishExpansion(filled)
+            }
+        }
+    }
+
+    /// Runs the rest of the existing pipeline (date/time/clipboard/system
+    /// variables, then {{CURSOR}}, then paste) and clears isExpanding on
+    /// every path out of expandSnippetSync — the fast path, a submitted
+    /// input popup, or (via the guard above) a cancelled one.
+    nonisolated private func finishExpansion(_ rawContent: String) {
         let processor = SnippetVariableProcessor.shared
-        let processedContent = processor.processVariables(in: snippet.content)
+        let processedContent = processor.processVariables(in: rawContent)
 
         let (finalContent, cursorOffset) = processor.extractCursorPosition(from: processedContent)
 
@@ -264,6 +293,8 @@ class TextExpansionMonitor: ObservableObject {
         if let offset = cursorOffset {
             moveCursorBack(by: finalContent.count - offset)
         }
+
+        isExpanding = false
     }
 
     nonisolated private func moveCursorBack(by count: Int) {
