@@ -16,11 +16,12 @@ I spend most of my time in the Apple ecosystem — automation for macOS fleets, 
 | [Platy](Platy/README.md) | macOS | Local AI terminal console — runs models through Ollama, optional Claude API fallback |
 | Restless | macOS | Stay-awake and app-caffeinate tool |
 | Snipster | macOS | Code snippet manager |
+| [Snipster for Windows](Snipster-Windows/README.md) | Windows | Text snippet manager and expander |
 | Time Machine Manager | macOS | Time Machine backup utility |
 
 ## Stack
 
-Most of the macOS and iOS work is Swift. Platy is Python. Scripts are Bash.
+Most of the macOS and iOS work is Swift. Platy is Python. Snipster for Windows is C#/.NET. Scripts are Bash.
 
 There's other stuff scattered around too — bash and Python snippets that probe macOS behavior, Jamf Pro and SentinelOne automation experiments, text-cleanup utilities, and a couple of half-built ideas for plugin systems that may or may not go anywhere.
 
