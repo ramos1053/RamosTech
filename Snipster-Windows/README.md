@@ -46,7 +46,7 @@ Reachable from the tray icon's right-click menu. Covers launching Snipster at Wi
 
 ## Installing
 
-Download `Snipster-Setup.exe` and run it — it installs entirely into your own user profile and never asks for administrator rights, so it works the same way whether or not your Windows account has local admin permissions. It adds a Start Menu shortcut and, if you check the box during install, a desktop shortcut. Uninstall it the normal way, from Windows' Apps list or the Start Menu shortcut.
+Download `Snipster-Setup.exe` from the [latest release](https://github.com/ramos1053/RamosTech/releases/tag/snipster-windows-v1.0.0) and run it — it installs entirely into your own user profile and never asks for administrator rights, so it works the same way whether or not your Windows account has local admin permissions. It adds a Start Menu shortcut and, if you check the box during install, a desktop shortcut. Uninstall it the normal way, from Windows' Apps list or the Start Menu shortcut.
 
 ## Building from source
 
