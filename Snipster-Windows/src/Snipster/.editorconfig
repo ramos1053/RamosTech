@@ -1,0 +1,13 @@
+root = true
+
+[*.cs]
+# Surface dead code as build warnings instead of only IDE suggestions —
+# this is what actually caught the findings from the "strip dead code" pass;
+# keeping it enabled going forward so new dead code doesn't silently pile up.
+# (IDE0005 unused-usings also requires GenerateDocumentationFile=true to be
+# enforced at build time, which we don't want on permanently since it forces
+# XML-doc warnings on every public member — check for it manually if needed.)
+dotnet_diagnostic.IDE0051.severity = warning  # unused private member
+dotnet_diagnostic.IDE0052.severity = warning  # private member value never read
+dotnet_diagnostic.CS0169.severity = warning   # unused field
+dotnet_diagnostic.CS0414.severity = warning   # field assigned but never read

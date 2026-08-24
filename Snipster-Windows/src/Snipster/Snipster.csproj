@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- Needed for System.Windows.Forms.NotifyIcon (tray icon) and Keys enum;
+         WPF has no first-party tray icon API. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Surfaces unused usings/private members as build warnings (see .editorconfig
+         for the specific rules) so dead code doesn't silently accumulate. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>Snipster</AssemblyName>
+    <RootNamespace>Snipster</RootNamespace>
+
+    <!--
+      Framework-dependent (not self-contained): this machine already has the
+      Microsoft.WindowsDesktop.App 9.0 shared runtime installed system-wide,
+      so we don't need to bundle a private copy of the runtime to run here.
+      A self-contained publish is still an option later for distributing to
+      machines that don't have the runtime pre-installed.
+    -->
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,55 @@
+<Window x:Class="Snipster.Views.PreferencesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Snipster Preferences" Width="440" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
+    <StackPanel Margin="14">
+
+        <GroupBox Header="General" Padding="10" Margin="0,0,0,10">
+            <StackPanel>
+                <CheckBox x:Name="LaunchAtStartupBox" Content="Launch Snipster at Windows startup"
+                          Checked="LaunchAtStartupBox_Changed" Unchecked="LaunchAtStartupBox_Changed"/>
+                <CheckBox x:Name="ExpansionEnabledBox" Content="Text expansion enabled" Margin="0,8,0,0"
+                          Checked="ExpansionEnabledBox_Changed" Unchecked="ExpansionEnabledBox_Changed"/>
+            </StackPanel>
+        </GroupBox>
+
+        <GroupBox Header="Quick Access Hotkey" Padding="10" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="HotkeyLabel" VerticalAlignment="Center" FontWeight="Bold"/>
+                <Button Content="Change..." Margin="12,0,0,0" Click="ChangeHotkey_Click"/>
+            </StackPanel>
+        </GroupBox>
+
+        <GroupBox Header="Clipboard History" Padding="10" Margin="0,0,0,10">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Keep last" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="ClipboardMaxBox" Width="70" Margin="8,0" SelectionChanged="ClipboardMaxBox_Changed">
+                        <ComboBoxItem Content="10"/>
+                        <ComboBoxItem Content="25"/>
+                        <ComboBoxItem Content="50"/>
+                        <ComboBoxItem Content="100"/>
+                    </ComboBox>
+                    <TextBlock Text="items" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Margin="0,8,0,0" Foreground="Gray" TextWrapping="Wrap"
+                           Text="History is kept in memory only and is never written to disk — it's always empty again after Snipster restarts."/>
+                <Button Content="Clear Now" HorizontalAlignment="Left" Margin="0,8,0,0" Click="ClearNow_Click"/>
+            </StackPanel>
+        </GroupBox>
+
+        <GroupBox Header="Snippet Library Storage" Padding="10" Margin="0,0,0,10">
+            <StackPanel>
+                <TextBlock Text="Current location:"/>
+                <TextBox x:Name="LibraryPathBox" IsReadOnly="True" Margin="0,4,0,8" Background="#F5F5F5"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Open Folder" Click="OpenFolder_Click"/>
+                    <Button Content="Change Location..." Margin="8,0,0,0" Click="ChangeLocation_Click"/>
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+
+        <Button Content="Close" Width="80" HorizontalAlignment="Right" Click="Close_Click"/>
+    </StackPanel>
+</Window>
