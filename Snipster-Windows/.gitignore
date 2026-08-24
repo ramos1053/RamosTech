@@ -1,0 +1,8 @@
+# Build output
+src/**/bin/
+src/**/obj/
+
+# Local packaging output — Snipster-Setup.exe is a release artifact,
+# not something that belongs in source control
+publish/
+dist/

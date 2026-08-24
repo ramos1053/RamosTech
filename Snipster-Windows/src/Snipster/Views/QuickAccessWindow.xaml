@@ -1,0 +1,27 @@
+<Window x:Class="Snipster.Views.QuickAccessWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Snipster" Height="360" Width="480"
+        WindowStyle="ToolWindow" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True" Deactivated="Window_Deactivated">
+    <DockPanel Margin="10">
+        <TextBox x:Name="SearchBox" DockPanel.Dock="Top" Margin="0,0,0,8"
+                 FontSize="16" Padding="4"
+                 TextChanged="SearchBox_TextChanged"
+                 KeyDown="SearchBox_KeyDown"/>
+        <!-- Tag filter chips are built in code-behind since the tag list is dynamic. -->
+        <WrapPanel x:Name="TagFilterPanel" DockPanel.Dock="Top" Margin="0,0,0,8"/>
+        <ListBox x:Name="ResultsList" DockPanel.Dock="Top"
+                 MouseDoubleClick="ResultsList_MouseDoubleClick">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Margin="2">
+                        <TextBlock Text="{Binding Trigger}" FontWeight="Bold" Width="120"/>
+                        <TextBlock Text="{Binding Content}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</Window>
