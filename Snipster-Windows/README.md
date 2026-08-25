@@ -75,7 +75,7 @@ dotnet publish -c Release -r win-x64 --self-contained true
 
 ## How it's built
 
-`TextExpansionMonitor` installs a `WH_KEYBOARD_LL` hook and matches typed text against snippet triggers; `KeyboardLayoutTranslator` turns each keystroke into the character it actually produces under the active window's real keyboard layout and modifier state via `ToUnicodeEx`, rather than assuming a US layout. `HotkeyManager` wraps `RegisterHotKey` with a conflict probe so a hotkey change can never silently fail. `ClipboardHistoryMonitor` uses `AddClipboardFormatListener` — event-driven, not polled. `FileStorageManager` persists the library as a single JSON file with an atomic write-then-rename. `TrayIconManager` uses WinForms' `NotifyIcon`, since WPF has no first-party tray icon API, alongside WPF for every window and dialog in the app. None of this requires administrator rights or any elevated capability — the app's manifest explicitly declares `asInvoker`, and every Win32 API it calls (`RegisterHotKey`, `SetWindowsHookEx`, `AddClipboardFormatListener`, `SendInput`) is a standard, non-elevated, per-user API.
+`TextExpansionMonitor` installs a `WH_KEYBOARD_LL` hook and matches typed text against snippet triggers; `KeyboardLayoutTranslator` turns each keystroke into the character it actually produces under the active window's real keyboard layout and modifier state via `ToUnicodeEx`, rather than assuming a US layout. `HotkeyManager` wraps `RegisterHotKey` with a conflict probe so a hotkey change can never silently fail. `ClipboardHistoryMonitor` uses `AddClipboardFormatListener` — event-driven, not polled. `FileStorageManager` persists the library as a single JSON file with an atomic write-then-rename. `TrayIconManager` uses WinForms' `NotifyIcon`, since WPF has no first-party tray icon API, alongside WPF for every window and dialog in the app. `StartupManager` handles "launch at Windows startup" through the per-user `HKCU\...\Run` registry key (cleaned up automatically on uninstall), and `DebugLog` writes a size-capped (1MB) diagnostic log for the keyboard hook that deliberately never records raw keystrokes, clipboard contents, or snippet text — just structural events — so it can't double as an accidental keylogger. None of this requires administrator rights or any elevated capability — the app's manifest explicitly declares `asInvoker`, and every Win32 API it calls (`RegisterHotKey`, `SetWindowsHookEx`, `AddClipboardFormatListener`, `SendInput`) is a standard, non-elevated, per-user API.
 
 ## Differences from the macOS version
 
@@ -85,4 +85,4 @@ If you run into a bug, include your Windows version and Snipster version along w
 
 ## License
 
-Personal and educational use. Feel free to fork and modify.
+MIT — see [LICENSE](LICENSE).

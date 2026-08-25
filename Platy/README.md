@@ -114,8 +114,8 @@ A few commands worth knowing: `/model` switches models, `/auto` lets Platy pick 
 
 ## Where things get stored
 
-Conversations land in `~/platy_sessions/`, pinned and learned facts live in `~/.platy_memory.json`, and your input history is in `~/.platy_history`.
+Conversations land in `~/platy_sessions/`, and pinned and learned facts live in `~/.platy_memory.json`.
 
 ## Script validation
 
-If you drop the `shellcheck` binary at `~/bin/shellcheck`, Platy will run it against any Bash script it generates before handing it back to you. Get it from shellcheck.net.
+Platy runs `shellcheck` against any Bash script it generates before handing it back to you, if it can find one — it checks your `PATH` first, then falls back to `~/bin/shellcheck`. Get the binary from shellcheck.net if you don't already have it installed.

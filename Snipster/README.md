@@ -14,7 +14,7 @@ Press the hotkey from anywhere and you land in a tag-folder view — click or En
 
 ## Clipboard history
 
-The quick-access window keeps a running, in-memory record of your last several copies — nothing is ever written to disk, and it clears automatically when Snipster quits, plus whatever auto-clear schedule you set (never, hourly, daily, or weekly) as a safety net for sessions that run for days. Browse it from the "Clipboard History" folder at the top of the window; selecting an older entry copies it back to the clipboard and moves it to the top. Right-click any entry and choose Save as Snippet to keep it permanently — it opens the usual new-snippet editor pre-filled with that content.
+The quick-access window keeps a running, in-memory record of your last several copies — nothing is ever written to disk, and it clears automatically when Snipster quits, plus whatever auto-clear schedule you set (never, hourly, daily, or weekly) as a safety net for sessions that run for days. Browse it from the "Clipboard History" folder at the top of the window; selecting an older entry copies it back to the clipboard and moves it to the top. Right-click any entry and choose Save as Snippet to keep it permanently — it opens the usual new-snippet editor pre-filled with that content. Snippets without any tags get their own "Untagged" folder in the same window, so they're never buried.
 
 Copies from apps that mark their pasteboard content as concealed or transient (password managers like 1Password, for instance) are never recorded, following the same `org.nspasteboard.*` convention those apps already use to opt out of other clipboard managers.
 
@@ -110,4 +110,4 @@ If you run into a bug, check existing issues first, and include your macOS and S
 
 ## License
 
-Personal and educational use. Feel free to fork and modify.
+MIT — see [LICENSE](LICENSE).

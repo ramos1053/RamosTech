@@ -16,7 +16,7 @@ Saving works the way you'd expect — ⌘S to save, ⌘⇧S for Save As with for
 
 Line numbers and a horizontal ruler are both toggleable, long lines soft-wrap, and invisible characters (spaces, tabs, line endings) can be shown when you need to see exactly what's in a file. Fonts are fully customizable — any system or user-installed font, adjustable size via ⌘+/⌘-, with live preview in preferences — and line endings convert freely between LF, CRLF, and CR.
 
-Syntax highlighting covers Bash, Python, Swift, and JavaScript keywords, and auto-completion is context-aware: it detects the language from the shebang, understands commands, flags, variables, and keywords, and covers Python, Ruby, JavaScript, PHP, Perl, and Bash. It includes control-flow templates (if, for, while, class, function), environment variable completion (`$PATH`, `$HOME`, etc.), and command-flag completion — trigger it manually with Escape.
+Syntax highlighting covers Bash, Python, Swift, JavaScript, HTML, CSS, JSON, XML, YAML, Ruby, Perl, PHP, Java, C, C++, Objective-C, Go, Rust, SQL, and TypeScript, and auto-completion is context-aware: it detects the language from the shebang, understands commands, flags, variables, and keywords, and covers Python, Ruby, JavaScript, PHP, Perl, and Bash. It includes control-flow templates (if, for, while, class, function), environment variable completion (`$PATH`, `$HOME`, etc.), and command-flag completion — trigger it manually with Escape.
 
 ## Search and replace
 
@@ -26,7 +26,7 @@ Related shortcuts: ⌘F to find, ⌘G for find next, ⌘⇧G for find previous, 
 
 ## Running scripts
 
-⌘R runs shell, Python, Ruby, Perl, JavaScript, or PHP scripts directly, with the interpreter auto-detected. A verbose mode adds tracing flags where the interpreter supports them (`bash -x`, `python -u`, and so on). Output shows up in a resizable panel at the bottom of the editor (100–400px, with a draggable divider), streaming stdout/stderr in real time with buttons to clear or close it, plus copy support and a monospaced font. ⌘. stops a running script, and a green or red indicator reports the exit code. There are also header templates for quickly inserting shebangs or XML/plist headers at the top of a new file.
+⌘R runs shell, Python, Ruby, Perl, JavaScript, or PHP scripts directly, with the interpreter auto-detected. A verbose mode adds tracing flags where the interpreter supports them (`bash -x`, `python -u`, and so on). Output shows up in a resizable panel at the bottom of the editor (100–400px, with a draggable divider), streaming stdout/stderr in real time with buttons to clear or close it, plus copy support and a monospaced font. ⌘. stops a running script, and a green or red indicator reports the exit code. There are also header templates for quickly inserting shebangs or XML/plist headers at the top of a new file. Bash scripts get a `shellcheck` pass before they run, if `shellcheck` is installed — problems show up alongside the script's own output.
 
 ## Workspaces, tabs, and printing
 
@@ -50,7 +50,12 @@ PIP/
 │   ├── AppPreferences.swift      # UserDefaults-based settings
 │   ├── FileFormat.swift          # Format handlers (CSV, RTF, DOCX, etc.)
 │   ├── DocumentManager.swift     # File operations manager
-│   └── ScriptExecutor.swift      # Script execution & logging
+│   ├── ScriptExecutor.swift      # Script execution, shellcheck pre-flight & logging
+│   ├── AutoSaveManager.swift     # Timed auto-save
+│   ├── EditorTheme.swift         # Theme definitions
+│   ├── Snippet.swift             # Snippet model
+│   ├── TabManager.swift          # Tab/document tracking
+│   └── WorkspaceManager.swift    # Multi-workspace state
 ├── Engine/
 │   ├── PieceTable.swift          # Core text storage (grapheme-safe)
 │   ├── TextEngine.swift          # Main coordinator
@@ -60,12 +65,17 @@ PIP/
 ├── Tokenizers/
 │   ├── Tokenizer.swift           # Base tokenizer protocol
 │   ├── SwiftTokenizer.swift      # Swift language syntax
-│   └── JSONTokenizer.swift       # JSON format syntax
+│   ├── JSONTokenizer.swift       # JSON format syntax
+│   ├── BashTokenizer.swift       # Bash/shell syntax
+│   └── MarkdownTokenizer.swift   # Markdown syntax
 ├── UI/
 │   ├── EditorView.swift          # NSTextView wrapper with ruler/line numbers
 │   ├── LineNumberRulerView.swift # Custom line number gutter
 │   ├── PreferencesWindow.swift   # Settings interface
-│   └── LogViewer.swift           # Script output viewer
+│   ├── FindReplacePanel.swift    # Find/replace UI
+│   ├── SnippetsView.swift        # Snippet management UI
+│   ├── TabBar.swift              # Tab strip
+│   └── WorkspaceBar.swift        # Workspace switcher
 ├── IO/
 │   └── FileIOManager.swift       # Streaming file operations with fsync
 ├── Highlighting/
@@ -76,16 +86,13 @@ PIP/
 │   ├── BashCompletionProvider.swift    # Multi-language completion
 │   ├── CompletionListView.swift        # Completion UI
 │   └── CompletionWindowController.swift # Window management
-├── PIPApp.swift                  # App entry point & menus
-└── ContentView.swift             # Main layout
-
-PIPTests/
-├── PieceTableTests.swift         # Unit tests for text storage
-├── SearchEngineTests.swift       # Tests for search/replace
-└── FileIOManagerTests.swift      # Integration tests for file I/O
-
-PIPBenchmarks/
-└── PieceTableBenchmarks.swift    # Performance benchmarks
+├── Debug/
+│   ├── DebugConsoleWindow.swift  # Debug console (off by default)
+│   └── DebugLogger.swift         # Debug logging
+├── PIP.sdef                       # Apple Events scripting definition
+├── PIP.entitlements               # Sandbox entitlements
+├── PIPApp.swift                   # App entry point & menus
+└── ContentView.swift               # Main layout
 ```
 
 ## Building
@@ -98,54 +105,7 @@ Requirements: macOS 14.0+, Xcode 15.4+, Swift 5.9+.
 
 ## Testing
 
-Run everything with:
-
-```bash
-xcodebuild test -project PIP.xcodeproj -scheme PIP -destination 'platform=macOS'
-```
-
-or target a specific suite:
-
-```bash
-# PieceTable tests (grapheme-safe text storage)
-xcodebuild test -project PIP.xcodeproj -scheme PIP -destination 'platform=macOS' \
-  -only-testing:PIPTests/PieceTableTests
-
-# SearchEngine tests (regex search, chunk boundaries)
-xcodebuild test -project PIP.xcodeproj -scheme PIP -destination 'platform=macOS' \
-  -only-testing:PIPTests/SearchEngineTests
-
-# FileIO tests (crash safety, atomic writes)
-xcodebuild test -project PIP.xcodeproj -scheme PIP -destination 'platform=macOS' \
-  -only-testing:PIPTests/FileIOManagerTests
-```
-
-or a single method:
-
-```bash
-xcodebuild test -project PIP.xcodeproj -scheme PIP -destination 'platform=macOS' \
-  -only-testing:PIPTests/PieceTableTests/testGraphemeClusterEmoji
-```
-
-`PieceTableTests` covers grapheme-cluster handling (emoji, combining marks, flags), insert/delete at various positions, and boundary conditions on large text. `SearchEngineTests` covers literal and regex search, case sensitivity, whole-word matching, chunk-boundary correctness (which matters a lot on large files), dry-run replace, and streaming search. `FileIOManagerTests` covers encoding detection, line-ending detection, atomic writes under crash conditions, concurrent writes, backups, and large-file handling.
-
-## Benchmarking
-
-```bash
-xcodebuild test -project PIP.xcodeproj -scheme PIP -destination 'platform=macOS' \
-  -only-testing:PIPBenchmarks
-```
-
-or a specific one:
-
-```bash
-xcodebuild test -project PIP.xcodeproj -scheme PIP -destination 'platform=macOS' \
-  -only-testing:PIPBenchmarks/PieceTableBenchmarks
-```
-
-Look for "Time:" in the output for average time per iteration, and compare against a baseline to catch regressions. Rough targets: sequential append under 0.001ms per operation (it's O(1)), random insert under 0.01ms, a 1MB insert under 50ms, retrieving text from a 10MB document under 100ms, and a find-replace pass over 10MB under 500ms.
-
-The available benchmarks are `testBenchmarkSequentialAppend`, `testBenchmarkRandomInserts`, `testBenchmarkLargeInsert`, `testBenchmarkDeleteFromEnd`, `testBenchmarkGetTextManyPieces`, `testBenchmarkTypingSimulation`, `testBenchmarkFindAndReplace`, and `testBenchmarkEmojiContent`.
+There's no `PIPTests` or `PIPBenchmarks` target in the project yet — the Xcode project currently has a single scheme with no automated tests wired up. See "A few more things" below for the performance targets it's built toward.
 
 ## Keyboard shortcuts
 
@@ -254,7 +214,9 @@ The core is done: the piece-table engine, coalescing undo/redo, the editor view 
 
 In progress: find/replace is done with real-time highlighting and navigation, as are text transformations and multi-page printing. Still open: multi-file search, code folding, multiple cursors, a full snippet system (the preferences UI already exists for it), and auto-completion.
 
-Further out: LSP integration, Git integration (blame, diff, staging), a plugin system via XPC, AppleScript/Shortcuts support, a command-line companion tool, and a diff viewer. And further still: a TextKit 2 migration, Tree-sitter parsing, semantic highlighting, memory-mapped large files, incremental layout improvements, and custom themes.
+PIP already has basic AppleScript support — a scripting definition (`PIP.sdef`) exposes `open`/`close`/`save`/`quit` Apple Events — though Shortcuts support isn't built on top of it yet.
+
+Further out: LSP integration, Git integration (blame, diff, staging), a plugin system via XPC, fuller AppleScript/Shortcuts coverage, a command-line companion tool, and a diff viewer. And further still: a TextKit 2 migration, Tree-sitter parsing, semantic highlighting, memory-mapped large files, incremental layout improvements, and custom themes.
 
 ## Why these particular choices
 
