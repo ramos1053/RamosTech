@@ -1,90 +1,67 @@
-```
-██████  ██         ██     ████████  ██    ██         .--..-'''-''''-._
-██  ██  ██        ████       ██     ██    ██     ___/%   ) )      \ i-;;,_
-██████  ██      ████████     ██       ████      (:___/--/ /--------\ ) `'-'
-██      ██      ██    ██     ██        ██            ""          ""
-██      ██████  ██    ██     ██        ██
-```
+# Platy
 
-A local AI terminal console. Runs models on your machine via Ollama. No cloud required by default. Optional Claude API integration for tasks that need a more capable model.
+Platy is a terminal console for talking to AI models that run entirely on your own machine, through Ollama. There's no cloud dependency and nothing leaves your computer unless you turn on the optional Claude API fallback for harder questions.
 
----
+## What you need
 
-## Requirements
+- macOS, Apple Silicon or Intel
+- Python 3.9+ (standard library only — nothing to `pip install`)
+- [Ollama](https://ollama.com), which does the actual model serving
 
-- macOS (Apple Silicon or Intel)
-- Python 3.9 or later — standard library only, no pip installs needed
-- [Ollama](https://ollama.com) — the local model engine
+## Getting it running
 
----
-
-## Install
-
-### 1. Install Ollama
-
-Download and install from [ollama.com](https://ollama.com).
-
-On Linux:
+Install Ollama from ollama.com. On Linux you can skip the installer and just run:
 
 ```sh
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-### 2. Pull a model
-
-Platy works with any model Ollama supports. Good general-purpose choice:
+Then pull a model. `qwen2.5:14b` is a good default if your Mac can handle it:
 
 ```sh
 ollama pull qwen2.5:14b
 ```
 
-Smaller, faster, uses less RAM:
+or, if you're tighter on RAM:
 
 ```sh
 ollama pull phi3
 ```
 
-You can pull as many models as you want and switch between them inside Platy with `/model`.
+Nothing stops you from pulling several and flipping between them later with `/model`.
 
-### 3. Install Platy
+Now grab Platy itself:
 
 ```sh
 mkdir -p ~/bin
-curl -o ~/bin/platy https://raw.githubusercontent.com/ramos1053/RamosTech/main/Platy/platy
+cp ./platy ~/bin/platy
 chmod +x ~/bin/platy
 ```
 
-Make sure `~/bin` is on your PATH. Add this to `~/.zshrc` if it isn't already:
+and make sure `~/bin` is actually on your `PATH` — add this to `~/.zshrc` if it's missing:
 
 ```sh
 export PATH="$HOME/bin:$PATH"
-```
-
-Then reload your shell:
-
-```sh
 source ~/.zshrc
 ```
 
----
+## Optional extras
 
-## Configure
+None of this is required — Platy works fine offline with just Ollama. Set whichever of these you want in `~/.zshrc` or a secrets file it sources.
 
-Set these in `~/.zshrc` or a secrets file you source from it. None are required to run Platy — it works offline out of the box with just Ollama.
-
-**Claude API** (optional — enables smarter fallback for hard tasks):
+Claude API access, for when a task needs more horsepower than a local model can give:
 
 ```sh
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-**Serper web search** (optional — DuckDuckGo is used by default):
+Serper for web search (DuckDuckGo is the default if you skip this):
 
 ```sh
 export SERPER_API_KEY="..."
 ```
 
-**Product documentation search** (optional — adds a `/docs` command that searches your configured product's docs):
+And if you want a `/docs` command that searches a specific product's documentation instead of the general web, point it at that product:
 
 ```sh
 export PLATY_DOCS_NAME="Jamf Pro"
@@ -92,25 +69,23 @@ export PLATY_DOCS_SITES="site:developer.jamf.com OR site:docs.jamf.com"
 export PLATY_DOCS_KEYWORDS="jamf,jss,jamf pro"
 ```
 
-Replace those values with any product and its documentation domains. The keywords control when Platy auto-routes questions to your docs instead of a general web search.
+Swap in whatever product and domains you actually need — the keyword list is just what triggers Platy to route a question to `/docs` automatically instead of a plain web search.
 
----
-
-## Run
+## Using it
 
 ```sh
 platy
 ```
 
-One-shot mode — ask a question without entering the TUI:
+drops you into the TUI. If you just want a quick answer without the full interface:
 
 ```sh
 platy what is the syntax for a Swift async function
 ```
 
----
+Dragging a file or folder from Finder into the terminal window also works — Platy will read it in.
 
-## Commands
+A few commands worth knowing: `/model` switches models, `/auto` lets Platy pick one for you, `/think` toggles deeper reasoning, and `/pin` / `/learn` / `/forget` / `/memory` manage facts that persist across sessions. `/read` and `/watch` load or track a file, `/run` executes the last script Platy generated, and `/sessions` / `/export` / `/clear` manage the conversation itself. `/help` lists everything.
 
 | Command | What it does |
 |---|---|
@@ -133,58 +108,14 @@ platy what is the syntax for a Swift async function
 | `/help` | Full command list |
 | `/exit` | Quit |
 
-Drag a file or folder from Finder into the terminal window — Platy reads it automatically.
+## Keeping Ollama in shape
 
----
+`ollama list` shows what you've got installed, `ollama pull llama3.1:8b` grabs something new, and `ollama rm qwen2.5:14b` gets rid of a model you don't need anymore. The Ollama macOS app starts the server automatically, but if Platy can't reach it, run `ollama serve` yourself and check again. Updating Ollama is just re-running the installer — same one-liner as above on Linux, or a fresh download on macOS.
 
-## Maintaining Ollama
+## Where things get stored
 
-**See what models you have:**
+Conversations land in `~/platy_sessions/`, pinned and learned facts live in `~/.platy_memory.json`, and your input history is in `~/.platy_history`.
 
-```sh
-ollama list
-```
+## Script validation
 
-**Pull a new model:**
-
-```sh
-ollama pull llama3.1:8b
-```
-
-**Remove a model:**
-
-```sh
-ollama rm qwen2.5:14b
-```
-
-**Update Ollama:**
-
-Re-download and run the installer from [ollama.com](https://ollama.com). On Linux:
-
-```sh
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-**Start the server manually** (macOS starts it automatically when you open the Ollama app):
-
-```sh
-ollama serve
-```
-
-If Platy can't connect to Ollama, make sure it's running before launching Platy.
-
----
-
-## Where data lives
-
-| Path | What's stored |
-|---|---|
-| `~/platy_sessions/` | Saved conversations |
-| `~/.platy_memory.json` | Pinned and learned facts |
-| `~/.platy_history` | Input history |
-
----
-
-## Optional: script validation
-
-Platy validates generated Bash scripts automatically if `shellcheck` is installed at `~/bin/shellcheck`. Download the binary from [shellcheck.net](https://www.shellcheck.net) and place it there.
+If you drop the `shellcheck` binary at `~/bin/shellcheck`, Platy will run it against any Bash script it generates before handing it back to you. Get it from shellcheck.net.

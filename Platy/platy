@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """platy — local AI terminal console (ollama + Claude)"""
 
-import os, sys, re, json, subprocess, tempfile, stat, threading, time, curses
+import os, sys, re, json, subprocess, tempfile, stat, threading, time, curses, shutil
 import difflib, hashlib, platform, socket, sqlite3, base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
@@ -14,7 +14,8 @@ from urllib.parse import urlencode
 DEFAULT_MODEL = "qwen2.5:14b"
 API_BASE      = "http://127.0.0.1:11434"
 SESS_DIR = Path.home() / "platy_sessions"
-SESS_DIR.mkdir(exist_ok=True)
+SESS_DIR.mkdir(exist_ok=True, mode=0o700)
+os.chmod(SESS_DIR, 0o700)   # mkdir's mode is masked by umask — enforce explicitly
 
 SERPER_KEY    = os.getenv("SERPER_API_KEY", "")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -27,8 +28,8 @@ DOCS_NAME     = os.getenv("PLATY_DOCS_NAME", "")
 DOCS_SITES    = os.getenv("PLATY_DOCS_SITES", "")
 DOCS_KEYWORDS = os.getenv("PLATY_DOCS_KEYWORDS", "")
 CLAUDE_MODELS = [
-    ("claude-opus-4-6",           "Anthropic  ·  most capable"),
-    ("claude-sonnet-4-6",         "Anthropic  ·  balanced  ← recommended"),
+    ("claude-opus-4-8",           "Anthropic  ·  most capable"),
+    ("claude-sonnet-5",           "Anthropic  ·  balanced  ← recommended"),
     ("claude-haiku-4-5-20251001", "Anthropic  ·  fast & cheap"),
 ]
 
@@ -344,19 +345,31 @@ _MASCOT = (
 
 # ── Markdown / marker stripping ────────────────────────────────────────────────
 
+_FENCE_RE    = re.compile(r"^\s*```")
+_SCRIPT_ST_RE = re.compile(r"^\s*SCRIPT_START\s*$")
+_SCRIPT_EN_RE = re.compile(r"^\s*SCRIPT_END\s*$")
+_FILENAME_RE  = re.compile(r"^\s*FILENAME\s*:\s*\S+\s*$")
+_HEADER_STRIP_RE = re.compile(r"^#{1,6} ")
+_BOLD_STRIP_RE   = re.compile(r"\*\*([^*]+)\*\*")
+_ITALIC_STRIP_RE = re.compile(r"\*([^*]+)\*")
+_CODE_STRIP_RE   = re.compile(r"`([^`]+)`")
+
 def strip_line(line):
     """Strip markdown and platy control markers. Returns None to suppress line."""
-    if re.match(r"^\s*```",                    line): return None
-    if re.match(r"^\s*SCRIPT_START\s*$",       line): return None
-    if re.match(r"^\s*SCRIPT_END\s*$",         line): return None
-    if re.match(r"^\s*FILENAME\s*:\s*\S+\s*$", line): return None
-    line = re.sub(r"^#{1,6} ",        "",    line)
-    line = re.sub(r"\*\*([^*]+)\*\*", r"\1", line)
-    line = re.sub(r"\*([^*]+)\*",     r"\1", line)
-    line = re.sub(r"`([^`]+)`",       r"\1", line)
+    if _FENCE_RE.match(line):     return None
+    if _SCRIPT_ST_RE.match(line): return None
+    if _SCRIPT_EN_RE.match(line): return None
+    if _FILENAME_RE.match(line):  return None
+    line = _HEADER_STRIP_RE.sub("",    line)
+    line = _BOLD_STRIP_RE.sub(r"\1",   line)
+    line = _ITALIC_STRIP_RE.sub(r"\1", line)
+    line = _CODE_STRIP_RE.sub(r"\1",   line)
     return line
 
 _MD_INLINE_RE = re.compile(r'\*\*([^*\n]+)\*\*|`([^`\n]+)`')
+_MD_HEADER_RE = re.compile(r'^(#{1,6})\s+(.*)')
+_MD_HR_RE     = re.compile(r'^[-*_]{3,}\s*$')
+_MD_BULLET_RE = re.compile(r'^(\s*)([-*])\s+(.*)')
 
 def _parse_md_segs(line, default_cp):
     """
@@ -366,17 +379,17 @@ def _parse_md_segs(line, default_cp):
     segs        — list of (text, cp, attrs) for inline rendering, or None for plain.
     """
     # Headers → bold cyan, strip the # prefix
-    hm = re.match(r'^(#{1,6})\s+(.*)', line)
+    hm = _MD_HEADER_RE.match(line)
     if hm:
         text = hm.group(2).strip()
         return text, TUI.CP_CYAN, True, None
 
     # Horizontal rules → dim separator
-    if re.match(r'^[-*_]{3,}\s*$', line):
+    if _MD_HR_RE.match(line):
         return '─' * 40, TUI.CP_INFO, False, None
 
     # Bullet/list items → replace dash/asterisk with •
-    bm = re.match(r'^(\s*)([-*])\s+(.*)', line)
+    bm = _MD_BULLET_RE.match(line)
     if bm:
         line = bm.group(1) + '• ' + bm.group(3)
 
@@ -819,8 +832,19 @@ def _fix_command(text):
 
 # ── Ollama / model helpers ─────────────────────────────────────────────────────
 
-def get_models():
-    """Local ollama models first, Claude API models listed last as opt-in."""
+_MODELS_CACHE_TTL = 30   # seconds — avoids redundant HTTP round-trips to the
+                         # local ollama daemon when several call sites need
+                         # the model list within the same turn
+_models_cache    = None
+_models_cache_ts = 0.0
+
+def get_models(force=False):
+    """Local ollama models first, Claude API models listed last as opt-in.
+    Cached for _MODELS_CACHE_TTL seconds; pass force=True to bypass (e.g.
+    right after the user may have pulled/removed a model out-of-band)."""
+    global _models_cache, _models_cache_ts
+    if not force and _models_cache is not None and time.time() - _models_cache_ts < _MODELS_CACHE_TTL:
+        return _models_cache
     out = []
     try:
         with urlopen(Request(f"{API_BASE}/api/tags"), timeout=5) as resp:
@@ -837,6 +861,8 @@ def get_models():
     # Claude models appended last — available but never auto-selected
     if ANTHROPIC_KEY:
         out.extend(CLAUDE_MODELS)
+    _models_cache    = out
+    _models_cache_ts = time.time()
     return out
 
 # ── TUI ────────────────────────────────────────────────────────────────────────
@@ -855,9 +881,12 @@ class TUI:
     CP_CYAN   = 8   # cyan           (accents)
     CP_WARN   = 9   # yellow         (uncertain / unverified)
 
+    _RENDER_INTERVAL = 0.04   # ~25/sec cap on full redraws during rapid-fire add() bursts (streaming)
+
     def __init__(self, stdscr):
         self.stdscr = stdscr
         self._lock  = threading.Lock()
+        self._last_render_ts = 0.0
 
         self._lines        = []   # list of (cp, text, bold)
         self._pinned_lines = []   # always-visible lines at top (mascot + help)
@@ -925,13 +954,20 @@ class TUI:
         self._session = session
 
     def add(self, text, cp=None, bold=False, dim=False):
-        """Append a completed line to the chat area. Thread-safe."""
+        """Append a completed line to the chat area. Thread-safe.
+        Full redraws are throttled to _RENDER_INTERVAL so a fast burst of
+        appends (e.g. a streaming AI response) doesn't redraw the whole
+        pane once per line — callers that need an immediate flush (end of
+        a stream, resize, etc.) should follow up with redraw()."""
         if cp is None:
             cp = self.CP_AI
         with self._lock:
             self._hard_wrap_append(text, cp, bold, dim=dim)
             if self._scroll == 0:
-                self._render()
+                now = time.time()
+                if now - self._last_render_ts >= self._RENDER_INTERVAL:
+                    self._render()
+                    self._last_render_ts = now
 
     def clear_chat(self):
         """Erase all chat lines and redraw."""
@@ -975,6 +1011,7 @@ class TUI:
         """Full redraw. Thread-safe."""
         with self._lock:
             self._render()
+            self._last_render_ts = time.time()
 
     # ── internal rendering ─────────────────────────────────────────────────────
 
@@ -1949,11 +1986,15 @@ def session_manager(stdscr):
     Returns (sess_name, messages) if a session was loaded, else (None, None).
     """
     def _load_sessions():
-        return sorted(
-            [(p.stem, p) for p in SESS_DIR.iterdir() if p.suffix == ".jsonl"],
-            key=lambda x: x[1].stat().st_mtime,
-            reverse=True,
-        )
+        # Load each session's metadata once here rather than on every redraw —
+        # draw() runs after nearly every keypress (arrow keys, selection, etc).
+        entries = [(p.stem, p) for p in SESS_DIR.iterdir() if p.suffix == ".jsonl"]
+        out = []
+        for name, path in entries:
+            label, updated = _load_session_meta(path)
+            out.append((name, path, label, updated))
+        out.sort(key=lambda x: x[3], reverse=True)
+        return out
 
     sessions = _load_sessions()
     selected = set()
@@ -1980,10 +2021,9 @@ def session_manager(stdscr):
             pass
 
         list_h = h - 3
-        for i, (name, path) in enumerate(sessions):
+        for i, (name, path, label, updated) in enumerate(sessions):
             if i >= list_h:
                 break
-            label, updated = _load_session_meta(path)
             rel   = _relative_time(updated)
             display = label if label else name[:36]
             marker = "◆" if i in selected else "◇"
@@ -2064,7 +2104,7 @@ def session_manager(stdscr):
         elif ch in (curses.KEY_ENTER, ord('\n'), ord('\r')):
             if not sessions:
                 continue
-            name, _ = sessions[cursor]
+            name = sessions[cursor][0]
             curses.curs_set(1)
             n, msgs = load_session_messages(name)
             return n, msgs
@@ -2072,7 +2112,7 @@ def session_manager(stdscr):
         elif ch in (ord('r'), ord('R')):
             if not sessions:
                 continue
-            name, path = sessions[cursor]
+            name, path = sessions[cursor][0], sessions[cursor][1]
             prompt_text = f"  rename  '{name}'  →  "
             try:
                 stdscr.move(h - 1, 0)
@@ -2088,7 +2128,8 @@ def session_manager(stdscr):
                 new_path = SESS_DIR / f"{new_name}.jsonl"
                 try:
                     path.rename(new_path)
-                    sessions[cursor] = (new_name, new_path)
+                    label, updated = _load_session_meta(new_path)
+                    sessions[cursor] = (new_name, new_path, label, updated)
                 except Exception as e:
                     try:
                         stdscr.addstr(h - 1, 0, f"  rename failed: {e}"[:w - 1],
@@ -2521,6 +2562,11 @@ def display_sources():
 
 # ── Diff colorization ─────────────────────────────────────────────────────────
 
+_DIFF_ADD_RE = re.compile(r'^\+(?!\+\+)')
+# Diff deletion: '-' immediately followed by non-space/non-dash content.
+# Markdown bullets ("- item") start with "- " and must NOT be colored red.
+_DIFF_DEL_RE = re.compile(r'^-(?![-\s])')
+
 def _diff_style(text):
     """
     Detect unified-diff line prefixes and return (tui_cp, ansi_code).
@@ -2529,11 +2575,9 @@ def _diff_style(text):
     @@ ...  → cyan hunk header
     anything else → normal AI color
     """
-    if re.match(r'^\+(?!\+\+)', text):  return TUI.CP_OK,   GREEN
-    # Diff deletion: '-' immediately followed by non-space/non-dash content.
-    # Markdown bullets ("- item") start with "- " and must NOT be colored red.
-    if re.match(r'^-(?![-\s])', text):  return TUI.CP_ERR,  RED
-    if text.startswith('@@'):           return TUI.CP_CYAN, CYAN
+    if _DIFF_ADD_RE.match(text):  return TUI.CP_OK,   GREEN
+    if _DIFF_DEL_RE.match(text):  return TUI.CP_ERR,  RED
+    if text.startswith('@@'):     return TUI.CP_CYAN, CYAN
     return TUI.CP_AI, ""
 
 _CONF_TAG_RE = re.compile(r'^\[(C|U|K)\]\s*')
@@ -2572,6 +2616,7 @@ def _read_calendar_fs():
     now_cd    = (now    - EPOCH).total_seconds()
     cutoff_cd = (cutoff - EPOCH).total_seconds()
     events = []
+    con = None
     try:
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
         cur = con.cursor()
@@ -2586,9 +2631,11 @@ def _read_calendar_fs():
             dt    = (EPOCH + timedelta(seconds=start_cd)).astimezone()
             label = "all day" if all_day else dt.strftime("%-I:%M %p")
             events.append(f"{summary.strip()} @ {dt.strftime('%a %b %-d')} {label}".strip())
-        con.close()
     except Exception:
         pass
+    finally:
+        if con is not None:
+            con.close()
     return events
 
 def _refresh_calendar():
@@ -2828,6 +2875,8 @@ def ask(messages, model, silent=False, strip_phantom_cites=False):
                         _flush_buf()
                         break
 
+        if _ui:
+            _ui.redraw()   # guarantee the last streamed line(s) are visible, even mid-throttle-window
         _clear_spinner()
         if not _ui and not silent:
             print(R, end="", flush=True)
@@ -2851,6 +2900,8 @@ def ask(messages, model, silent=False, strip_phantom_cites=False):
 
     except KeyboardInterrupt:
         _clear_spinner()
+        if _ui:
+            _ui.redraw()   # show whatever was streamed before the interrupt
         if not _ui and not silent:
             print(f"{R}")
 
@@ -2986,7 +3037,7 @@ def _pick_model_curses(stdscr, models, current):
 
 
 def pick_model(current="", stdscr=None):
-    models = get_models()
+    models = get_models(force=True)   # user explicitly opened the picker — show current state
     if not models:
         return DEFAULT_MODEL
 
@@ -3123,7 +3174,9 @@ def write_file(path_str, content):
 
 # ── Script extraction & validation ────────────────────────────────────────────
 
-SHELLCHECK       = str(Path.home() / "bin" / "shellcheck")
+# Prefer whatever shellcheck is on PATH (e.g. Homebrew); fall back to the
+# ~/bin/shellcheck location the README documents for users without a package manager.
+SHELLCHECK       = shutil.which("shellcheck") or str(Path.home() / "bin" / "shellcheck")
 MAX_FIX_ATTEMPTS = 3
 
 def extract_script(response):
@@ -3235,7 +3288,11 @@ def validate_script(script, stype):
         f.write(script); tmp = f.name
 
     def _run(cmd, label):
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        except subprocess.TimeoutExpired:
+            errors.append(f"{label}: timed out after 10s — skipped")
+            return
         out = (r.stdout + r.stderr).strip().replace(tmp, "script")
         if r.returncode != 0 and out:
             errors.append(f"{label}:\n{out}")
@@ -3245,12 +3302,15 @@ def validate_script(script, stype):
             shell = "bash" if stype == "bash" else "sh"
             _run([shell, "-n", tmp], f"{shell} -n (syntax)")
             if stype == "bash" and Path(SHELLCHECK).exists():
-                r = subprocess.run(
-                    [SHELLCHECK, "--shell=bash", "--format=gcc", tmp],
-                    capture_output=True, text=True)
-                if r.returncode != 0:
-                    errors.append("shellcheck:\n" +
-                                  r.stdout.strip().replace(tmp, "script"))
+                try:
+                    r = subprocess.run(
+                        [SHELLCHECK, "--shell=bash", "--format=gcc", tmp],
+                        capture_output=True, text=True, timeout=10)
+                    if r.returncode != 0:
+                        errors.append("shellcheck:\n" +
+                                      r.stdout.strip().replace(tmp, "script"))
+                except subprocess.TimeoutExpired:
+                    errors.append("shellcheck: timed out after 10s — skipped")
         elif stype == "zsh":
             _run(["zsh", "-n", tmp], "zsh -n (syntax)")
         elif stype == "python":
@@ -3314,7 +3374,7 @@ def offer_save(script, suggested):
             except (EOFError, KeyboardInterrupt):
                 yn = "No"
         if yn.startswith("Yes"):
-            p.chmod(p.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            p.chmod(p.stat().st_mode | stat.S_IXUSR)
             print_ok(f"chmod +x {p}")
 
 
@@ -3343,6 +3403,7 @@ def _save_memory_file():
     tmp = MEMORY_FILE.with_suffix(".tmp")
     try:
         tmp.write_text(json.dumps({"pinned": _memory, "learned": _learned}, indent=2))
+        os.chmod(tmp, 0o600)   # personal facts — owner-only, survives the rename below
         tmp.replace(MEMORY_FILE)
     except Exception as e:
         if _ui:
@@ -3396,14 +3457,25 @@ def _meta_path(sess_path):
     return Path(str(sess_path).replace(".jsonl", ".meta.json"))
 
 def _save_session_meta(sess_path, label=None):
+    """Persist the session label; 'last updated' is tracked via the meta
+    file's own mtime rather than a stored field (see _load_session_meta)."""
     mp = _meta_path(sess_path)
+    if not label:
+        # Hot path — called on every message via save_turn(). Just bump
+        # mtime instead of a read-parse-rewrite of the whole file.
+        try:
+            if mp.exists():
+                os.utime(mp, None)
+            else:
+                mp.write_text("{}")
+        except Exception:
+            pass
+        return
     try:
         meta = json.loads(mp.read_text()) if mp.exists() else {}
     except Exception:
         meta = {}
-    meta["updated"] = time.time()
-    if label:
-        meta["label"] = label
+    meta["label"] = label
     tmp = mp.with_suffix(".tmp")
     try:
         tmp.write_text(json.dumps(meta))
@@ -3419,7 +3491,7 @@ def _load_session_meta(sess_path):
     mp = _meta_path(sess_path)
     try:
         meta = json.loads(mp.read_text())
-        return meta.get("label", ""), meta.get("updated", sess_path.stat().st_mtime)
+        return meta.get("label", ""), mp.stat().st_mtime
     except Exception:
         try:
             return "", sess_path.stat().st_mtime
@@ -3468,8 +3540,7 @@ def save_turn(path, role, content):
     try:
         with open(path, "a") as f:
             f.write(json.dumps({"role": role, "content": content}) + "\n")
-            f.flush()
-            os.fsync(f.fileno())
+            f.flush()   # buffered write is enough for a chat log; skip fsync's disk-sync cost
     except OSError as e:
         if _ui:
             _ui.add(f"  warning: session not saved — {e}", TUI.CP_ERR)
@@ -3477,7 +3548,9 @@ def save_turn(path, role, content):
 
 def load_session_messages(name):
     """Load all messages from a session file. Skips corrupted lines silently."""
-    jl = SESS_DIR / f"{name}.jsonl"
+    jl = (SESS_DIR / f"{name}.jsonl").resolve()
+    if not jl.is_relative_to(SESS_DIR.resolve()):
+        return None, None   # reject names that escape the sessions directory
     if not jl.exists():
         return None, None
     msgs = []
@@ -3926,16 +3999,22 @@ def _tui_main(stdscr):
         elif user_input.startswith("/history"):
             query = user_input[8:].strip()
             hits  = []
-            for p in sorted(SESS_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-                if p.suffix != ".jsonl":
-                    continue
-                try:
-                    text = p.read_text()
-                    if not query or query.lower() in text.lower():
-                        label, updated = _load_session_meta(p)
-                        hits.append((label or p.stem, _relative_time(updated), p.stem))
-                except Exception:
-                    continue
+            if _ui:
+                _ui.spin_update("○  searching sessions…")
+            try:
+                for p in sorted(SESS_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+                    if p.suffix != ".jsonl":
+                        continue
+                    try:
+                        text = p.read_text()
+                        if not query or query.lower() in text.lower():
+                            label, updated = _load_session_meta(p)
+                            hits.append((label or p.stem, _relative_time(updated), p.stem))
+                    except Exception:
+                        continue
+            finally:
+                if _ui:
+                    _ui.spin_stop()
             if not hits:
                 print_info("no matching sessions found")
             else:
