@@ -10,7 +10,7 @@ A worldwide public restroom finder for iOS. GottaGo queries multiple live databa
 
 ## What it does
 
-The map view switches between Standard, Satellite, and Hybrid, with color-coded pins so you can tell at a glance which restrooms are free, paid, or unverified. You can filter by Free, Accessible, or Gender Neutral, search by name or address, and add your own entries — optionally contributing them back to the Refuge Restrooms community database. If you set a Mapillary API key, the detail sheet also shows nearby street-level photos. You can review any restroom, including ones pulled from the live databases — for Refuge Restrooms entries, a review also sends an upvote or downvote to their API. Favorites get one-tap navigation, and everything backs up to iCloud.
+The map view switches between Standard, Satellite, and Hybrid, with color-coded pins so you can tell at a glance which restrooms are free, paid, or unverified. You can filter by Free, Accessible, or Gender Neutral, search by name or address, and add your own entries — optionally contributing them back to the Refuge Restrooms community database. If you set a Mapillary API key, the detail sheet also shows nearby street-level photos. You can review any restroom, including ones pulled from the live databases — for Refuge Restrooms entries, a review also sends an upvote or downvote to their API. Favorites get one-tap navigation. iCloud backup for your favorites and reviews is built in, but the required entitlement ships commented out — see [`iOS/README.md`](iOS/README.md) for what it takes to turn it on.
 
 ## Data sources
 
@@ -30,4 +30,4 @@ See [`iOS/README.md`](iOS/README.md) for the Xcode build and sideloading instruc
 
 ## License
 
-See [LICENSE](../LICENSE) at the repository root.
+MIT — see [LICENSE](LICENSE).
