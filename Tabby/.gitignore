@@ -1,0 +1,48 @@
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+
+# Build products
+build/
+DerivedData/
+*.app
+*.appex
+*.o
+*.dSYM
+*.dSYM.zip
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Dependencies
+Pods/
+Carthage/
+.build/
+.swiftpm/
+
+# IDE
+*.xcworkspace
+!*.xcodeproj/project.xcworkspace
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.moved-aside
+
+# Archives
+*.xcarchive
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Environment / secrets
+.env
+*.key
+*.pem
+*.p12
+
+# Working notes
+PLAN.md

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the main Tabby macOS app.
+
+  Required entitlements:
+  - com.apple.security.app-sandbox: Set to NO (non-sandboxed) because:
+    * We need to write Native Messaging host manifests to browser-specific directories
+    * We need to create Unix domain sockets in /tmp
+    * We need to launch/activate other applications via NSWorkspace
+  - com.apple.security.application-groups: For sharing data with the Safari extension
+  - com.apple.security.network.client: For Unix domain socket communication
+
+  NOTE: If you want to distribute via the Mac App Store, you must sandbox the app.
+  In that case, you'll need to:
+  1. Set app-sandbox to YES
+  2. Use XPC services for privileged operations
+  3. Use a separate privileged helper tool for file installation
+  4. Request temporary-exception entitlements for specific paths
+-->
+<plist version="1.0">
+<dict>
+    <!-- Non-sandboxed for direct file system access to browser directories -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+
+    <!-- App Group for communicating with the Safari App Extension -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.tabby.shared</string>
+    </array>
+
+    <!-- Network client for Unix domain socket communication -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>

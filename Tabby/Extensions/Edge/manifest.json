@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Tabby - Tab Enumerator",
+  "version": "1.0.0",
+  "description": "Enumerates open tabs and sends them to the Tabby macOS app for Mission Control display.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2BE0c3Jce6Nam+1hm0DJoEYwHx8Xl6bdXLDux5IbrPYlRxhEIL3hpibmtyvQSqnomy0RjJEzNwUTw+bjJJPoh7gGIIxA1urICW8OZJgT3712qR1KrBYPAf5qYXJ1XrkBy2V+5vbfdZ+rbN9wuRfWqVLqiZyTt1ojGzJfa/ImhO6Af76bsv/d/kGK/CtWJ64Kl2gsFdeGFm/pxet7OEwHY/kZdNMXQ5oNeAe9rmU0+IxlgVWyFmt+dvO9WKZ8X8uLG4uYlt+92uvETCe7X1OjREj54zIB+JQvhP7+L/vrOCQ4H/eW8Yy4/8yZueECkCJEynI1WAweBVcPg6Sb+1BtvwIDAQAB",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "nativeMessaging",
+    "favicon"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "minimum_chrome_version": "110"
+}
