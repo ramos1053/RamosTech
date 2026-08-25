@@ -6,7 +6,7 @@
 ; any standard user account, including ones without local admin rights.
 
 #define MyAppName "Snipster"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Alan Ramos"
 #define MyAppExeName "Snipster.exe"
 

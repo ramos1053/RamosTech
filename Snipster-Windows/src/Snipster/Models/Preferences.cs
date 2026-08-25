@@ -13,4 +13,14 @@ public class Preferences
 
     /// <summary>Null = default %LOCALAPPDATA%\Snipster location.</summary>
     public string? CustomLibraryFolder { get; set; }
+
+    /// <summary>Whether Manage Snippets was left grouping its list by tag.</summary>
+    public bool SnippetManagerGroupByTag { get; set; }
+
+    /// <summary>
+    /// Names of tag groups left collapsed in Manage Snippets — keyed by tag
+    /// name (the group identity the list already groups by) rather than tag
+    /// Id, since that's the value the collapse/expand UI actually observes.
+    /// </summary>
+    public List<string> SnippetManagerCollapsedTagGroups { get; set; } = new();
 }

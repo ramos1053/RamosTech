@@ -32,6 +32,15 @@ public partial class App : System.Windows.Application
         {
             DebugLog.Write($"UNHANDLED EXCEPTION: {args.Exception}");
             args.Handled = true;
+
+            // An exception that unwinds mid-click (e.g. out of a Button's
+            // OnClick) skips WPF's normal end-of-click capture release,
+            // which can leave mouse input stuck on a dead/invisible element
+            // — every subsequent click anywhere in the app silently does
+            // nothing until the process restarts. Force capture back to
+            // "nobody" so a swallowed exception can't strand input.
+            if (System.Windows.Input.Mouse.Captured is not null)
+                System.Windows.Input.Mouse.Capture(null);
         };
 
         _preferencesStore = new PreferencesStore();
@@ -116,7 +125,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _snippetManagerWindow = new SnippetManagerWindow(_library, _storage, prefillContent);
+        _snippetManagerWindow = new SnippetManagerWindow(_library, _storage, _preferences, _preferencesStore, prefillContent);
         _snippetManagerWindow.Show();
         _snippetManagerWindow.Activate();
     }

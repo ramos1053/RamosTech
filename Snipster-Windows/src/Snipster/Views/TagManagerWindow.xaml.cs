@@ -1,12 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Windows;
-using System.Windows.Media;
 using Snipster.Models;
+using Snipster.Services;
 using Snipster.Storage;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
-using Color = System.Windows.Media.Color;
-using ColorConverter = System.Windows.Media.ColorConverter;
 
 namespace Snipster.Views;
 
@@ -65,7 +63,7 @@ public partial class TagManagerWindow : Window
             AnyColor = true,
         };
 
-        if (TryParseColor(ColorBox.Text, out var currentBrush) && currentBrush.Color is var c)
+        if (TagColorParser.TryParse(ColorBox.Text, out var currentBrush) && currentBrush.Color is var c)
             dialog.Color = System.Drawing.Color.FromArgb(c.A, c.R, c.G, c.B);
 
         if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
@@ -75,21 +73,7 @@ public partial class TagManagerWindow : Window
 
     private void UpdateColorPreview()
     {
-        ColorPreview.Fill = TryParseColor(ColorBox.Text, out var brush) ? brush : Brushes.Transparent;
-    }
-
-    private static bool TryParseColor(string hex, out SolidColorBrush brush)
-    {
-        try
-        {
-            brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-            return true;
-        }
-        catch
-        {
-            brush = new SolidColorBrush(Colors.Transparent);
-            return false;
-        }
+        ColorPreview.Fill = TagColorParser.TryParse(ColorBox.Text, out var brush) ? brush : Brushes.Transparent;
     }
 
     private int CountSnippetsForTag(string tagId) => _library.Snippets.Count(s => s.TagId == tagId);
@@ -107,13 +91,21 @@ public partial class TagManagerWindow : Window
     {
         if (_selected is null) return;
 
-        _library.Tags.Remove(_selected.Tag);
+        var deletedTag = _selected.Tag;
+
+        _library.Tags.Remove(deletedTag);
+
+        // Removing the selected item fires SelectionChanged synchronously,
+        // which reassigns the `_selected` field (to another tag, or null if
+        // the list is now empty) before this method continues. `deletedTag`
+        // was captured above so the snippet cleanup below still targets the
+        // tag that was actually deleted, not whatever `_selected` becomes.
         _items.Remove(_selected);
 
         // Snippets pointing at the deleted tag must fall back to "no tag" —
         // expansion never depended on a tag, but a dangling TagId would
         // show up as a broken reference in the snippet editor.
-        foreach (var snippet in _library.Snippets.Where(s => s.TagId == _selected.Tag.Id))
+        foreach (var snippet in _library.Snippets.Where(s => s.TagId == deletedTag.Id))
             snippet.TagId = null;
 
         _storage.Save(_library);
@@ -130,7 +122,7 @@ public partial class TagManagerWindow : Window
             return;
         }
 
-        if (!TryParseColor(ColorBox.Text, out _))
+        if (!TagColorParser.TryParse(ColorBox.Text, out _))
         {
             ShowValidationError("Color must be a valid hex code, e.g. #4A90D9.");
             return;
@@ -164,9 +156,9 @@ public partial class TagManagerWindow : Window
         {
             Tag = tag;
             SnippetCount = snippetCount;
-            SwatchBrush = TryParseColor(tag.ColorHex, out var brush) ? brush : Brushes.Gray;
+            SwatchBrush = TagColorParser.TryParse(tag.ColorHex, out var brush) ? brush : Brushes.Gray;
         }
 
-        public void Refresh() => SwatchBrush = TryParseColor(Tag.ColorHex, out var brush) ? brush : Brushes.Gray;
+        public void Refresh() => SwatchBrush = TagColorParser.TryParse(Tag.ColorHex, out var brush) ? brush : Brushes.Gray;
     }
 }

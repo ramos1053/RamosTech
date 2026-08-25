@@ -1,6 +1,6 @@
 # Snipster for Windows
 
-Version 1.0.0
+Version 1.1.0
 
 A Windows tray app for managing and expanding text snippets — keyboard triggers, dynamic variables, fill-in template prompts, tag-based organization, a bounded clipboard history, and a Spotlight-style quick-access window you can summon from anywhere with a global hotkey. This is an independent Windows port of [Snipster](../Snipster) for macOS, built from scratch against the Win32 and WPF APIs rather than sharing any code with it — see "Differences from the macOS version" below for where the two diverge.
 
@@ -38,6 +38,8 @@ Add, edit, and delete snippets from the Manage Snippets window, reachable from t
 
 Tags get their own name and color, set through a real color picker (or typed as a hex code directly) from the Manage Tags window, which also shows a live count of how many snippets use each tag. Deleting a tag clears it from any snippets that referenced it rather than leaving a dangling reference behind.
 
+Each snippet in the list shows a small dot in its tag's color, so you can see how the library is organized at a glance. Check "Group by tag" to cluster the list under a collapsible header per tag (plus one for snippets with no tag), each with its own disclosure triangle — click one to hide or show just that tag's snippets, or use the Expand All / Collapse All buttons above the list to do it for every group at once. Whether grouping is on and which groups you left collapsed are both remembered the next time you open Manage Snippets, even across a restart.
+
 Export writes the whole library to a JSON file. Import shows a preview of exactly what a file contains — every trigger and a preview of its content, with any multi-line content made visible rather than hidden as a single line — before anything is merged in, and any incoming trigger that collides with an existing one is skipped and flagged in that preview.
 
 ## Preferences
@@ -46,7 +48,7 @@ Reachable from the tray icon's right-click menu. Covers launching Snipster at Wi
 
 ## Installing
 
-Download `Snipster-Setup.exe` from the [latest release](https://github.com/ramos1053/RamosTech/releases/tag/snipster-windows-v1.0.0) and run it — it installs entirely into your own user profile and never asks for administrator rights, so it works the same way whether or not your Windows account has local admin permissions. It adds a Start Menu shortcut and, if you check the box during install, a desktop shortcut. Uninstall it the normal way, from Windows' Apps list or the Start Menu shortcut.
+Download `Snipster-Setup.exe` from the [latest release](https://github.com/ramos1053/RamosTech/releases/tag/snipster-windows-v1.1.0) and run it — it installs entirely into your own user profile and never asks for administrator rights, so it works the same way whether or not your Windows account has local admin permissions. It adds a Start Menu shortcut and, if you check the box during install, a desktop shortcut. Uninstall it the normal way, from Windows' Apps list or the Start Menu shortcut.
 
 ## Building from source
 
@@ -76,6 +78,8 @@ dotnet publish -c Release -r win-x64 --self-contained true
 ## How it's built
 
 `TextExpansionMonitor` installs a `WH_KEYBOARD_LL` hook and matches typed text against snippet triggers; `KeyboardLayoutTranslator` turns each keystroke into the character it actually produces under the active window's real keyboard layout and modifier state via `ToUnicodeEx`, rather than assuming a US layout. `HotkeyManager` wraps `RegisterHotKey` with a conflict probe so a hotkey change can never silently fail. `ClipboardHistoryMonitor` uses `AddClipboardFormatListener` — event-driven, not polled. `FileStorageManager` persists the library as a single JSON file with an atomic write-then-rename. `TrayIconManager` uses WinForms' `NotifyIcon`, since WPF has no first-party tray icon API, alongside WPF for every window and dialog in the app. `StartupManager` handles "launch at Windows startup" through the per-user `HKCU\...\Run` registry key (cleaned up automatically on uninstall), and `DebugLog` writes a size-capped (1MB) diagnostic log for the keyboard hook that deliberately never records raw keystrokes, clipboard contents, or snippet text — just structural events — so it can't double as an accidental keylogger. None of this requires administrator rights or any elevated capability — the app's manifest explicitly declares `asInvoker`, and every Win32 API it calls (`RegisterHotKey`, `SetWindowsHookEx`, `AddClipboardFormatListener`, `SendInput`) is a standard, non-elevated, per-user API.
+
+The per-tag disclosure triangles in Manage Snippets are a plain WPF `Expander` wrapped around each group's `ItemsPresenter` via `GroupStyle.ContainerStyle` — no custom collapsing logic, just the control WPF already ships with. Which groups are collapsed lives in `Preferences.SnippetManagerCollapsedTagGroups`, written through `PreferencesStore` on every toggle so it survives a restart.
 
 ## Differences from the macOS version
 
