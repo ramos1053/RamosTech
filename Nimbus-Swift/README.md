@@ -1,6 +1,6 @@
 # Nimbus-Swift
 
-A full Swift rewrite of Nimbus, a Cumulus server management tool for macOS originally built with AppleScriptKit back in 2003. This version drops AppleScript entirely, runs on SwiftUI, and adds real-time server monitoring the original never had. It's free and open source — no registration, no licensing.
+A full Swift rewrite of Nimbus, a Cumulus server management tool for macOS originally built with AppleScriptKit back in 2003. This version drops AppleScript entirely, runs on SwiftUI, and adds real-time server monitoring the original never had. It's free and open source under the MIT license — no registration required.
 
 ## What's different from the original
 
@@ -24,7 +24,7 @@ Nimbus-Swift/
 │   └── ShellExecutor.swift            # Shell command execution wrapper
 ├── Resources/
 │   ├── Assets.xcassets/               # Asset catalog
-│   └── final_icon_nimbus.icns         # Original app icon
+│   └── final_icon_nimbus.png          # Original app icon
 ├── NimbusSwiftApp.swift               # Main app entry point
 ├── Info.plist                         # App configuration
 └── Nimbus_Swift.entitlements          # Entitlements (no sandbox)
@@ -46,7 +46,7 @@ The window itself is fixed at 650×550, non-resizable, with a hidden title bar s
 
 ## Requirements
 
-- macOS 13.0 (Ventura) or later
+- macOS 14.6 (Sonoma) or later
 - Xcode 15.0+
 - Swift 5.9+
 - A Cumulus Server installation, for the server-management features to have anything to talk to
@@ -74,7 +74,7 @@ Shell execution goes through Swift's `Process` API directly for non-privileged c
 | NIB files | SwiftUI views |
 | 32-bit | 64-bit |
 | Project Builder (.pbproj) | Xcode (.xcodeproj) |
-| macOS 10.2+ | macOS 13.0+ |
+| macOS 10.2+ | macOS 14.6+ |
 | Registration required | Free for everyone |
 | Static interface | Real-time monitoring |
 | Drawer UI | Compact fixed window |
@@ -92,6 +92,8 @@ Backups just need the catalog and backup paths configured; clicking Backup copie
 
 The Maintenance menu has the system log viewer and the log cleanup routine (admin password required for the latter). The Console section lets you type a command, hit Enter or click Run, and see the output below — again, a short list of dangerous commands (ssh, telnet, fsck, top, status) is blocked outright.
 
+A Help menu item ("Nimbus Online Help") links out to the online docs, and the standard macOS Settings window (⌘,) also opens the Preferences panel.
+
 ## Performance notes
 
 Monitoring runs every 2 seconds by default (configurable in `ServerViewModel`). Memory and CPU numbers come back instantly via `ps`; catalog size via `du` can take a while on directories over 100GB. When the server isn't running, metrics just show 0 — no wasted cycles.
@@ -106,7 +108,7 @@ The original Nimbus 2.0 (2003) was an AppleScriptKit-based Cumulus management to
 
 ## License
 
-Freeware — use it, modify it, share it.
+MIT — see [LICENSE](LICENSE).
 
 ## Troubleshooting
 

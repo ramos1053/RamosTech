@@ -12,16 +12,16 @@ Browser Extension → Native Messaging → TabbyHost → Unix Socket → Tabby A
 
 ## What it does
 
-Press the global hotkey (Cmd+Shift+T by default, and customizable) from anywhere and you get a grid of every tab from Chrome and Edge, each showing its favicon and, on hover, a live preview of the page. You can search by title or URL, click a tile to switch to that tab, right-click to close it, or drag tiles around to reorder them. Browser groups collapse independently, dark mode follows your system setting or can be forced either way, and the app itself runs as a menu bar agent with no dock icon — it can also launch at login if you want it always available.
+Press the global hotkey (Cmd+Shift+T by default, and customizable) from anywhere and you get a grid of every tab from Chrome and Edge, each showing its favicon (decoded from whatever the browser hands over, with an HTTP fallback if that fails) and, on hover, a live preview of the page rendered in a sandboxed, auto-zoomed WebView that times out after 5 seconds and refuses to follow cross-origin redirects — so it won't get stuck showing you a login page. You can search by title or URL, click a tile to switch to that tab, right-click to close it (or right-click a browser's section header to close every tab in that browser at once), or drag tiles around to reorder them. Browser groups collapse independently, dark mode follows your system setting or can be forced either way, and the app itself runs as a menu bar agent with no dock icon — it can also launch at login if you want it always available. Bundled browser extensions are re-copied into place on every launch, so updates propagate automatically (you'll still need to reload the extension in-browser, which the in-app Help section walks through).
 
 ## Getting started
 
-Build and run Tabby from Xcode (see [BUILD.md](BUILD.md) for the full walkthrough), then open Settings from the menu bar cat icon and toggle on whichever of Chrome or Edge you use. The Help section in Settings walks through loading the browser extensions. Once that's done, Cmd+Shift+T opens the grid.
+Build and run Tabby from Xcode, then open Settings from the menu bar cat icon and toggle on whichever of Chrome or Edge you use. The Help section in Settings walks through loading the browser extensions — Developer Mode, "Load unpacked," and the Accessibility permission the global hotkey needs. Once that's done, Cmd+Shift+T opens the grid.
 
 ## Requirements
 
-- macOS 13.0 (Ventura) or later
-- Xcode 15.0+ to build
+- macOS 15.0 (Sequoia) or later
+- Xcode 16+ to build
 - Chrome and/or Edge installed
 
 ## Project layout
@@ -33,8 +33,8 @@ Extensions/Edge/    Edge MV3 extension (service worker)
 NativeMessagingHost/ Native messaging bridge binary
 ```
 
-See [BUILD.md](BUILD.md) for the detailed layout and development guide.
+The native messaging protocol uses 4-byte little-endian length-prefixed JSON frames over a per-browser Unix socket (`tabby-<browser>.sock`), with `activateTab`/`requestTabs`/`closeTab`/`closeAllTabs` commands and retry/reconnect logic on both ends.
 
 ## License
 
-Copyright 2025-2026 A. Ramos, RamosTech. All rights reserved.
+MIT — see [LICENSE](LICENSE).
