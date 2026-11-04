@@ -22,6 +22,7 @@ Split out into their own repos:
 | [Snipster](https://github.com/ramos1053/Snipster) | macOS | Code snippet manager |
 | [Snipster for Windows](https://github.com/ramos1053/Snipster-Windows) | Windows | Text snippet manager and expander |
 | [Restless](https://github.com/ramos1053/Restless) | macOS | Stay-awake and app-caffeinate tool |
+| [MPP Viewer](https://github.com/ramos1053/MPP-Viewer-Mac) | macOS | Viewer/editor for Microsoft Project and related file formats — Gantt, Timeline, Network, Calendar, and Resource views |
 
 ## Stack
 
