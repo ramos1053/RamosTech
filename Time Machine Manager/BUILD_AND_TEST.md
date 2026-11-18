@@ -5,7 +5,7 @@
 ### 1. Open the Project in Xcode
 
 ```bash
-cd "~/Projects/Time Machine Manager/Time Machine Manager"
+cd "Time Machine Manager/Time Machine Manager"   # run from the root of the repository
 open "Time Machine Manager.xcodeproj"
 ```
 
@@ -93,7 +93,7 @@ If the app crashes or doesn't work:
 2. **Verify Permissions**: Ensure you have access to `/` for snapshots
 3. **Test Commands**: Run the test script:
    ```bash
-   cd "~/Projects/Time Machine Manager"
+   cd "Time Machine Manager"
    ./test_tm_commands.sh
    ```
 
