@@ -1,4 +1,4 @@
-# PIP — Professional Interactive Programming Editor
+# PIP: Professional Interactive Programming Editor
 
 A high-performance macOS text editor built for bash scripting and multi-language programming work, written in modern Swift and tuned to stay fast on large files.
 
@@ -8,35 +8,35 @@ Text storage is a piece table with O(log n) insertion and deletion, so editing s
 
 ## Working with files
 
-PIP opens plain text plus a handful of scripting languages directly — shell scripts (`.sh`, `.bash`, `.zsh`, runnable with ⌘R), Python, Ruby, Perl, JavaScript/Node, and PHP. Encoding support covers UTF-8/16/32 with their variants, ASCII, ISO Latin 1, Mac OS Roman, and Windows CP-1252, with automatic BOM detection and a custom encoding picker on save.
+PIP opens plain text plus a handful of scripting languages directly: shell scripts (`.sh`, `.bash`, `.zsh`, runnable with ⌘R), Python, Ruby, Perl, JavaScript/Node, and PHP. Encoding support covers UTF-8/16/32 with their variants, ASCII, ISO Latin 1, Mac OS Roman, and Windows CP-1252, with automatic BOM detection and a custom encoding picker on save.
 
-Saving works the way you'd expect — ⌘S to save, ⌘⇧S for Save As with format and encoding selection, an Export As option for format conversion, and atomic writes with backup creation so a crash mid-save doesn't cost you the file. Network volumes are supported too: you can browse, open, and save to them directly, with a remote-file indicator in the UI so you know when you're editing something that isn't local.
+Saving works the way you'd expect: ⌘S to save, ⌘⇧S for Save As with format and encoding selection, an Export As option for format conversion, and atomic writes with backup creation so a crash mid-save doesn't cost you the file. Network volumes are supported too: you can browse, open, and save to them directly, with a remote-file indicator in the UI so you know when you're editing something that isn't local.
 
 ## The editing experience
 
-Line numbers and a horizontal ruler are both toggleable, long lines soft-wrap, and invisible characters (spaces, tabs, line endings) can be shown when you need to see exactly what's in a file. Fonts are fully customizable — any system or user-installed font, adjustable size via ⌘+/⌘-, with live preview in preferences — and line endings convert freely between LF, CRLF, and CR.
+Line numbers and a horizontal ruler are both toggleable, long lines soft-wrap, and invisible characters (spaces, tabs, line endings) can be shown when you need to see exactly what's in a file. Fonts are fully customizable (any system or user-installed font, adjustable size via ⌘+/⌘-, with live preview in preferences), and line endings convert freely between LF, CRLF, and CR.
 
-Syntax highlighting covers Bash, Python, Swift, JavaScript, HTML, CSS, JSON, XML, YAML, Ruby, Perl, PHP, Java, C, C++, Objective-C, Go, Rust, SQL, and TypeScript, and auto-completion is context-aware: it detects the language from the shebang, understands commands, flags, variables, and keywords, and covers Python, Ruby, JavaScript, PHP, Perl, and Bash. It includes control-flow templates (if, for, while, class, function), environment variable completion (`$PATH`, `$HOME`, etc.), and command-flag completion — trigger it manually with Escape.
+Syntax highlighting covers Bash, Python, Swift, JavaScript, HTML, CSS, JSON, XML, YAML, Ruby, Perl, PHP, Java, C, C++, Objective-C, Go, Rust, SQL, and TypeScript. Auto-completion is context-aware: it detects the language from the shebang, understands commands, flags, variables, and keywords, and covers Python, Ruby, JavaScript, PHP, Perl, and Bash. It includes control-flow templates (if, for, while, class, function), environment variable completion (`$PATH`, `$HOME`, etc.), and command-flag completion. Trigger it manually with Escape.
 
 ## Search and replace
 
-The Find panel (⌘F) highlights matches in real time — orange for all matches, red-orange for the current one — with a counter showing your position (like "3/15"), up/down navigation arrows, and toggles for case sensitivity, whole-word matching, and regex. Replace supports both a single find-next replace and Replace All for bulk changes, both fully undoable (⌘Z / ⌘⇧Z), with success notifications showing how many replacements were made and no blocking while it runs.
+The Find panel (⌘F) highlights matches in real time (orange for all matches, red-orange for the current one) with a counter showing your position (like "3/15"), up/down navigation arrows, and toggles for case sensitivity, whole-word matching, and regex. Replace supports both a single find-next replace and Replace All for bulk changes, both fully undoable (⌘Z / ⌘⇧Z), with success notifications showing how many replacements were made and no blocking while it runs.
 
 Related shortcuts: ⌘F to find, ⌘G for find next, ⌘⇧G for find previous, ⌘E to use the current selection as the search term, and ⌘L to jump to a specific line.
 
 ## Running scripts
 
-⌘R runs shell, Python, Ruby, Perl, JavaScript, or PHP scripts directly, with the interpreter auto-detected. A verbose mode adds tracing flags where the interpreter supports them (`bash -x`, `python -u`, and so on). Output shows up in a resizable panel at the bottom of the editor (100–400px, with a draggable divider), streaming stdout/stderr in real time with buttons to clear or close it, plus copy support and a monospaced font. ⌘. stops a running script, and a green or red indicator reports the exit code. There are also header templates for quickly inserting shebangs or XML/plist headers at the top of a new file. Bash scripts get a `shellcheck` pass before they run, if `shellcheck` is installed — problems show up alongside the script's own output.
+⌘R runs shell, Python, Ruby, Perl, JavaScript, or PHP scripts directly, with the interpreter auto-detected. A verbose mode adds tracing flags where the interpreter supports them (`bash -x`, `python -u`, and so on). Output shows up in a resizable panel at the bottom of the editor (100-400px, with a draggable divider), streaming stdout/stderr in real time with buttons to clear or close it, plus copy support and a monospaced font. ⌘. stops a running script, and a green or red indicator reports the exit code. There are also header templates for quickly inserting shebangs or XML/plist headers at the top of a new file. Bash scripts get a `shellcheck` pass before they run, if `shellcheck` is installed, and problems show up alongside the script's own output.
 
 ## Workspaces, tabs, and printing
 
-PIP supports multiple independent workspaces, each with its own set of tabs — close with ⌘W, switch freely, and see a modified indicator plus the file name and extension on each tab. The sidebar (⌘⌃S) lists files in the current workspace, and a workspace bar switches between open workspaces.
+PIP supports multiple independent workspaces, each with its own set of tabs. Close with ⌘W, switch freely, and see a modified indicator plus the file name and extension on each tab. The sidebar (⌘⌃S) lists files in the current workspace, and a workspace bar switches between open workspaces.
 
 Printing (⌘P) flows text naturally across pages without truncating it, adapts to whatever page size you pick in the print dialog, defaults to 100% scaling with manual adjustment available, respects your configured margins, and gives you a full preview before anything goes to the printer.
 
 ## Preferences
 
-The Editor tab covers ruler and line-number visibility, line wrapping, invisible-character display and coloring, tab width (1–16 spaces), spaces-vs-tabs, auto-save interval, undo history limit, predictive completion, syntax coloring, current-line highlighting, status bar contents, verbose script output, and default window size. Appearance handles theme selection, font family and size (Menlo, Monaco, SF Mono, and others) with live preview, and cursor type and blinking. Document covers font and tab-width defaults specifically for new documents, and Advanced handles snippet management, auto-save settings, default encoding, custom directories for logs and temp scripts, and file cleanup.
+The Editor tab covers ruler and line-number visibility, line wrapping, invisible-character display and coloring, tab width (1-16 spaces), spaces-vs-tabs, auto-save interval, undo history limit, predictive completion, syntax coloring, current-line highlighting, status bar contents, verbose script output, and default window size. Appearance handles theme selection, font family and size (Menlo, Monaco, SF Mono, and others) with live preview, and cursor type and blinking. Document covers font and tab-width defaults specifically for new documents, and Advanced handles snippet management, auto-save settings, default encoding, custom directories for logs and temp scripts, and file cleanup.
 
 ## The rest of the interface
 
@@ -97,7 +97,7 @@ PIP/
 
 ## Building
 
-Before the first build, open `PIP.xcodeproj`, select the PIP target's **Signing & Capabilities**, and set **Team** to your own Apple developer account (or "Sign to Run Locally" for an ad-hoc build) — update the bundle identifier too if you need to.
+Before the first build, open `PIP.xcodeproj`, select the PIP target's **Signing & Capabilities**, and set **Team** to your own Apple developer account (or "Sign to Run Locally" for an ad-hoc build). Update the bundle identifier too if you need to.
 
 Then select the PIP scheme with **My Mac** as the destination in Xcode 15.4+ and press ⌘R.
 
@@ -105,36 +105,36 @@ Requirements: macOS 14.0+, Xcode 15.4+, Swift 5.9+.
 
 ## Testing
 
-There's no `PIPTests` or `PIPBenchmarks` target in the project yet — the Xcode project currently has a single scheme with no automated tests wired up. See "A few more things" below for the performance targets it's built toward.
+There's no `PIPTests` or `PIPBenchmarks` target in the project yet. The Xcode project currently has a single scheme with no automated tests wired up. See "A few more things" below for the performance targets it's built toward.
 
 ## Keyboard shortcuts
 
-**File** — ⌘N new, ⌘O open, ⌘S save, ⌘⇧S save as, ⌘P print, ⌘W close tab/window.
-**Editing** — ⌘Z undo, ⌘⇧Z redo, ⌘A select all, ⌘C/V/X copy/paste/cut.
-**View** — ⌘⌃S toggle sidebar, ⌘⌥O toggle script output, ⌘⌥I character inspector, ⌘⌥D debug console.
-**Script execution** — ⌘R run, ⌘. stop.
-**Formatting** — ⌘+ / ⌘- font size, ⌘T font panel.
-**Application** — ⌘, preferences, ⌘? help, ⌘Q quit.
+**File:** ⌘N new, ⌘O open, ⌘S save, ⌘⇧S save as, ⌘P print, ⌘W close tab/window.
+**Editing:** ⌘Z undo, ⌘⇧Z redo, ⌘A select all, ⌘C/V/X copy/paste/cut.
+**View:** ⌘⌃S toggle sidebar, ⌘⌥O toggle script output, ⌘⌥I character inspector, ⌘⌥D debug console.
+**Script execution:** ⌘R run, ⌘. stop.
+**Formatting:** ⌘+ / ⌘- font size, ⌘T font panel.
+**Application:** ⌘, preferences, ⌘? help, ⌘Q quit.
 
 ## Using it
 
-Open files with ⌘O from local or network locations — encoding is auto-detected, and `.sh`, `.bash`, `.zsh`, `.py`, `.rb`, `.pl`, `.js`, `.php`, `.swift`, `.txt`, and `.md` are all recognized. Each opens in a new tab within the current workspace.
+Open files with ⌘O from local or network locations. Encoding is auto-detected, and `.sh`, `.bash`, `.zsh`, `.py`, `.rb`, `.pl`, `.js`, `.php`, `.swift`, `.txt`, and `.md` are all recognized. Each opens in a new tab within the current workspace.
 
 ⌘S saves in place; ⌘⇧S (Save As) lets you pick both an output format and encoding, local or network. File > Export As handles broader format conversion.
 
-To run a script, open it, edit as needed, and press ⌘R — the output window appears automatically at the bottom with live stdout/stderr, ⌘. stops it if needed, and verbose mode (enabled in preferences) adds command tracing (`bash -x`, `python -u`) if you want to see exactly what's happening. Clear or close the output window from its toolbar.
+To run a script, open it, edit as needed, and press ⌘R. The output window appears automatically at the bottom with live stdout/stderr, ⌘. stops it if needed, and verbose mode (enabled in preferences) adds command tracing (`bash -x`, `python -u`) if you want to see exactly what's happening. Clear or close the output window from its toolbar.
 
-Header templates live behind the # button in the toolbar — pick a Bash or Python shebang, another language (Ruby, Perl, PHP, Node), or an XML/Plist header, and it's inserted at the top of the document with your cursor positioned right below it, ready to type.
+Header templates live behind the # button in the toolbar. Pick a Bash or Python shebang, another language (Ruby, Perl, PHP, Node), or an XML/Plist header, and it's inserted at the top of the document with your cursor positioned right below it, ready to type.
 
 Preferences (⌘,) covers line numbers, ruler, tabs, auto-save, script execution, status bar, and line highlighting under Editor; theme, font, and cursor style under Appearance; font and tab-width defaults under Document; and snippets, auto-save, encoding, and custom directories under Advanced.
 
-Line numbers and the ruler can both be toggled from Preferences or the View menu — line numbers update as you type, and both respect whatever font you've set.
+Line numbers and the ruler can both be toggled from Preferences or the View menu. Line numbers update as you type, and both respect whatever font you've set.
 
 ## How the piece table works
 
-The piece table keeps two buffers — an immutable original buffer holding the file's initial content, and an append-only added buffer for everything new — plus a descriptor table sequencing pieces across both, and a grapheme-indices cache for fast lookup of Unicode grapheme cluster boundaries.
+The piece table keeps two buffers (an immutable original buffer holding the file's initial content, and an append-only added buffer for everything new), plus a descriptor table sequencing pieces across both, and a grapheme-indices cache for fast lookup of Unicode grapheme cluster boundaries.
 
-All offsets are counted in grapheme clusters, not UTF-16 code units, which matters for anything with emoji, combining marks, or other complex Unicode — a naive UTF-16-based implementation can split a grapheme cluster mid-edit and corrupt the display. For example, `"👨‍👩‍👧‍👦"` (a family emoji built from a zero-width-joiner sequence) is a single grapheme cluster but eleven UTF-16 code units — PIP's piece table reports the length of `"Hello 👨‍👩‍👧‍👦"` as 7, not 16, because it's counting clusters:
+All offsets are counted in grapheme clusters, not UTF-16 code units, which matters for anything with emoji, combining marks, or other complex Unicode. A naive UTF-16-based implementation can split a grapheme cluster mid-edit and corrupt the display. For example, `"👨‍👩‍👧‍👦"` (a family emoji built from a zero-width-joiner sequence) is a single grapheme cluster but eleven UTF-16 code units. PIP's piece table reports the length of `"Hello 👨‍👩‍👧‍👦"` as 7, not 16, because it's counting clusters:
 
 ```swift
 let table = PieceTable(text: "Hello 👨‍👩‍👧‍👦")
@@ -145,11 +145,11 @@ Performance-wise: append is O(1), random insert/delete is O(log n), full-text re
 
 ## Undo, coalesced
 
-Commands merge within a 500ms window — sequential insertions combine, backspace/delete operations combine, and transactions group more complex multi-step edits. A stack size limit keeps it from growing unbounded over a long editing session.
+Commands merge within a 500ms window: sequential insertions combine, backspace/delete operations combine, and transactions group more complex multi-step edits. A stack size limit keeps it from growing unbounded over a long editing session.
 
 ## Crash-safe file I/O
 
-Reads stream in 1MB chunks with progress reporting on large files, BOM detection across UTF-8/16/32, fallback encoding heuristics when there's no BOM, and network file support via `NSOpenPanel`. Writes follow an atomic protocol: write to a temp file with a unique UUID name, `fsync()` it to make sure the data actually hit disk, close the descriptor, atomically rename it over the target (`replaceItemAt` on macOS), then `fsync()` the parent directory so the rename itself is durable. The upshot: even if the power goes out mid-save, you're left with either the complete old file or the complete new one — never something half-written.
+Reads stream in 1MB chunks with progress reporting on large files, BOM detection across UTF-8/16/32, fallback encoding heuristics when there's no BOM, and network file support via `NSOpenPanel`. Writes follow an atomic protocol: write to a temp file with a unique UUID name, `fsync()` it to make sure the data actually hit disk, close the descriptor, atomically rename it over the target (`replaceItemAt` on macOS), then `fsync()` the parent directory so the rename itself is durable. The upshot: even if the power goes out mid-save, you're left with either the complete old file or the complete new one, never something half-written.
 
 ```swift
 // Atomic save ensures crash safety
@@ -196,7 +196,7 @@ class MyLanguageTokenizer: BaseTokenizer {
 
 Plain text and shell scripts use direct string encoding; CSV is plain text with some special handling; RTF and DOCX go through `NSAttributedString` with the corresponding document type. Format is auto-detected from the file extension, and encoding round-trips cleanly.
 
-Script execution supports Bash, Shell, Zsh, Python, Ruby, Perl, JavaScript/Node, and PHP, picking the interpreter automatically from the extension and shebang. Verbose mode adds the relevant tracing flag per interpreter — `-x` for Bash/Shell/Zsh, `-u` for Python, `-v` for Ruby, `-w` for Perl. Under the hood, PIP makes a temporary copy in a secure location, sets owner-only execute permissions (0700), runs it with the right interpreter, streams stdout/stderr back asynchronously, reports the exit code (green for success, red for failure), and cleans up the process automatically. In normal mode, "success" means a clean exit code with nothing on stderr; in verbose mode, only the exit code is checked, since stderr tends to carry tracing noise.
+Script execution supports Bash, Shell, Zsh, Python, Ruby, Perl, JavaScript/Node, and PHP, picking the interpreter automatically from the extension and shebang. Verbose mode adds the relevant tracing flag per interpreter: `-x` for Bash/Shell/Zsh, `-u` for Python, `-v` for Ruby, `-w` for Perl. Under the hood, PIP makes a temporary copy in a secure location, sets owner-only execute permissions (0700), runs it with the right interpreter, streams stdout/stderr back asynchronously, reports the exit code (green for success, red for failure), and cleans up the process automatically. In normal mode, "success" means a clean exit code with nothing on stderr; in verbose mode, only the exit code is checked, since stderr tends to carry tracing noise.
 
 Syntax highlighting updates incrementally with a 150ms debounce, invalidating only the affected lines and tokenizing in the background based on the detected file language.
 
@@ -214,13 +214,13 @@ The core is done: the piece-table engine, coalescing undo/redo, the editor view 
 
 In progress: find/replace is done with real-time highlighting and navigation, as are text transformations and multi-page printing. Still open: multi-file search, code folding, multiple cursors, a full snippet system (the preferences UI already exists for it), and auto-completion.
 
-PIP already has basic AppleScript support — a scripting definition (`PIP.sdef`) exposes `open`/`close`/`save`/`quit` Apple Events — though Shortcuts support isn't built on top of it yet.
+PIP already has basic AppleScript support: a scripting definition (`PIP.sdef`) exposes `open`/`close`/`save`/`quit` Apple Events. Shortcuts support isn't built on top of it yet.
 
 Further out: LSP integration, Git integration (blame, diff, staging), a plugin system via XPC, fuller AppleScript/Shortcuts coverage, a command-line companion tool, and a diff viewer. And further still: a TextKit 2 migration, Tree-sitter parsing, semantic highlighting, memory-mapped large files, incremental layout improvements, and custom themes.
 
 ## Why these particular choices
 
-A piece table was the obvious pick — it's what VSCode and Atom use, it beats a gap buffer for random access, it's more efficient than a rope for typical editing patterns, and it's simpler than a CRDT when you don't need multi-user collaboration. NSTextView, likewise, is a mature and battle-tested AppKit component with built-in editing behavior, ruler support, and accessibility handled for you, plus straightforward SwiftUI integration — a move to TextKit 2 is planned, but there was no reason to wait on it for a v1.
+A piece table was the obvious pick: it's what VSCode and Atom use, it beats a gap buffer for random access, it's more efficient than a rope for typical editing patterns, and it's simpler than a CRDT when you don't need multi-user collaboration. NSTextView, likewise, is a mature and battle-tested AppKit component with built-in editing behavior, ruler support, and accessibility handled for you, plus straightforward SwiftUI integration. A move to TextKit 2 is planned, but there was no reason to wait on it for a v1.
 
 On the security side: the app runs sandboxed, file access goes through security-scoped bookmarks, only user-selected files are touched, there are no network connections without explicit user action, and scripts execute in an isolated subprocess.
 
@@ -230,4 +230,4 @@ Built with inspiration from VSCode's text buffer implementation, Zed's rope-base
 
 ## License
 
-MIT — see the LICENSE file for details.
+MIT. See the LICENSE file for details.

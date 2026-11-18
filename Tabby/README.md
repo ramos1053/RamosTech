@@ -12,11 +12,13 @@ Browser Extension → Native Messaging → TabbyHost → Unix Socket → Tabby A
 
 ## What it does
 
-Press the global hotkey (Cmd+Shift+T by default, and customizable) from anywhere and you get a grid of every tab from Chrome and Edge, each showing its favicon (decoded from whatever the browser hands over, with an HTTP fallback if that fails) and, on hover, a live preview of the page rendered in a sandboxed, auto-zoomed WebView that times out after 5 seconds and refuses to follow cross-origin redirects — so it won't get stuck showing you a login page. You can search by title or URL, click a tile to switch to that tab, right-click to close it (or right-click a browser's section header to close every tab in that browser at once), or drag tiles around to reorder them. Browser groups collapse independently, dark mode follows your system setting or can be forced either way, and the app itself runs as a menu bar agent with no dock icon — it can also launch at login if you want it always available. Bundled browser extensions are re-copied into place on every launch, so updates propagate automatically (you'll still need to reload the extension in-browser, which the in-app Help section walks through).
+Press the global hotkey (Cmd+Shift+T by default, and customizable) from anywhere and you get a grid of every tab from Chrome and Edge. Each tile shows its favicon (decoded from whatever the browser hands over, with an HTTP fallback if that fails). On hover you get a live preview of the page, rendered in a sandboxed, auto-zoomed WebView that times out after 5 seconds and refuses to follow cross-origin redirects, so it won't get stuck showing you a login page.
+
+You can search by title or URL, click a tile to switch to that tab, right-click to close it (or right-click a browser's section header to close every tab in that browser at once), or drag tiles around to reorder them. Browser groups collapse independently, and dark mode follows your system setting or can be forced either way. The app itself runs as a menu bar agent with no dock icon, and it can also launch at login if you want it always available. Bundled browser extensions are re-copied into place on every launch, so updates propagate automatically (you'll still need to reload the extension in-browser, which the in-app Help section walks through).
 
 ## Getting started
 
-Build and run Tabby from Xcode, then open Settings from the menu bar cat icon and toggle on whichever of Chrome or Edge you use. The Help section in Settings walks through loading the browser extensions — Developer Mode, "Load unpacked," and the Accessibility permission the global hotkey needs. Once that's done, Cmd+Shift+T opens the grid.
+Build and run Tabby from Xcode, then open Settings from the menu bar cat icon and toggle on whichever of Chrome or Edge you use. The Help section in Settings walks through loading the browser extensions: Developer Mode, "Load unpacked," and the Accessibility permission the global hotkey needs. Once that's done, Cmd+Shift+T opens the grid.
 
 ## Requirements
 
@@ -37,4 +39,4 @@ The native messaging protocol uses 4-byte little-endian length-prefixed JSON fra
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

@@ -1,30 +1,30 @@
 # GottaGo
 
-GottaGo is a free, open-source iOS app for finding public restrooms anywhere in the world. It hits several live databases at once, pulls in restrooms attached to gas stations, hotels, restaurants and parks (not just dedicated public facilities), and lets you build a private favorites list with one-tap walking navigation.
+GottaGo is a free, open-source iOS app for finding public restrooms anywhere in the world. It hits several live databases at once and pulls in restrooms attached to gas stations, hotels, restaurants and parks (not just dedicated public facilities). You can also build a private favorites list with one-tap walking navigation.
 
 ## Map and navigation
 
-The Home tab has a 300pt map preview; the Map tab gives you the full-screen version, switchable between Standard, Satellite, and Hybrid. Pins are color-coded — green for free, orange for paid, blue for unknown, pink for favorited — and a long press anywhere drops a new pin so you can add a restroom on the spot. Once you pick a destination, a walking route overlay shows ETA, distance, and a rough calorie estimate, and a "Locate Me" button snaps the map back to your position.
+The Home tab has a 300pt map preview; the Map tab gives you the full-screen version, switchable between Standard, Satellite, and Hybrid. Pins are color-coded: green for free, orange for paid, blue for unknown, pink for favorited. A long press anywhere drops a new pin so you can add a restroom on the spot. Once you pick a destination, a walking route overlay shows ETA, distance, and a rough calorie estimate, and a "Locate Me" button snaps the map back to your position.
 
 ## Live data, queried simultaneously
 
 | Source | Coverage | Notes |
 |--------|----------|-------|
-| OpenStreetMap / Overpass | Global | Dedicated `amenity=toilets` nodes plus any venue tagged `toilets=yes` — gas stations, hotels, restaurants, parks, stores, airports |
+| OpenStreetMap / Overpass | Global | Dedicated `amenity=toilets` nodes plus any venue tagged `toilets=yes`: gas stations, hotels, restaurants, parks, stores, airports |
 | Refuge Restrooms | Global | Community-curated, gender-neutral and accessible focus |
 | Great British Toilet Map | United Kingdom | 14,000+ government-verified entries via GraphQL |
 | Australia National Toilet Map | Australia | 17,000+ government-verified facilities via ArcGIS |
-| Wheelmap (optional) | Global, strong North America coverage | Wheelchair-accessible restrooms. Needs a free API key from [wheelmap.org/api](https://wheelmap.org/api) — set `wheelmapAPIKey` in `ToiletDataService.swift` before building. |
+| Wheelmap (optional) | Global, strong North America coverage | Wheelchair-accessible restrooms. Needs a free API key from [wheelmap.org/api](https://wheelmap.org/api). Set `wheelmapAPIKey` in `ToiletDataService.swift` before building. |
 
-Results get deduplicated by proximity so overlapping sources don't show the same toilet twice, and the app quietly refreshes in the background whenever you move more than a kilometer from wherever it last queried.
+Results get deduplicated by proximity so overlapping sources don't show the same toilet twice. The app quietly refreshes in the background whenever you move more than a kilometer from wherever it last queried.
 
-If you set a [Mapillary](https://www.mapillary.com/developer) access token (`mapillaryAccessToken` in `ToiletDataService.swift`), the detail sheet also shows a horizontal strip of nearby street-level photos. Leave it blank and the photo strip just doesn't appear — nothing else changes.
+If you set a [Mapillary](https://www.mapillary.com/developer) access token (`mapillaryAccessToken` in `ToiletDataService.swift`), the detail sheet also shows a horizontal strip of nearby street-level photos. Leave it blank and the photo strip just doesn't appear. Nothing else changes.
 
 ## Filtering and detail
 
-Three filter chips — Free, Accessible, Gender Neutral — show up on the Home, Map, and List tabs. Tapping any pin or row opens a detail sheet with a mini map, the Mapillary photo strip (if configured), cost/hours/accessibility info, average rating and cleanliness scores, and buttons for Apple Maps directions or an in-app walking route.
+Three filter chips (Free, Accessible, Gender Neutral) show up on the Home, Map, and List tabs. Tapping any pin or row opens a detail sheet with a mini map, the Mapillary photo strip (if configured), cost/hours/accessibility info, average rating and cleanliness scores, and buttons for Apple Maps directions or an in-app walking route.
 
-You can review any restroom — your own entries or anything pulled from the live databases. A review is an overall rating, a cleanliness rating (both 1–5), and a free-text comment; for Refuge Restrooms entries, submitting a review also sends an upvote or downvote to their API. Reviews on API-sourced bathrooms save locally and persist across launches.
+You can review any restroom, whether it's your own entry or anything pulled from the live databases. A review is an overall rating, a cleanliness rating (both 1 to 5), and a free-text comment. For Refuge Restrooms entries, submitting a review also sends an upvote or downvote to their API. Reviews on API-sourced bathrooms save locally and persist across launches.
 
 ## Favorites and the nearby list
 
@@ -36,7 +36,7 @@ Pick a category (public, restaurant, hotel, store, gas station, park, other), se
 
 ## Where things are stored
 
-Everything lives in `UserDefaults` locally, so it survives app restarts and updates. If you have a paid Apple Developer account, you can also enable iCloud Key-Value Store sync across devices — see the setup section below. You can delete your own entries at any time; entries pulled from the external APIs are read-only.
+Everything lives in `UserDefaults` locally, so it survives app restarts and updates. If you have a paid Apple Developer account, you can also enable iCloud Key-Value Store sync across devices (see the setup section below). You can delete your own entries at any time; entries pulled from the external APIs are read-only.
 
 ## Requirements
 
@@ -49,7 +49,7 @@ Everything lives in `UserDefaults` locally, so it survives app restarts and upda
 
 ### Optional API keys
 
-Both are optional — the app works fine without either, they just unlock extra data.
+Both are optional. The app works fine without either, and they just unlock extra data.
 
 | Key | Where to get it | What it enables |
 |-----|-----------------|-----------------|
@@ -66,19 +66,19 @@ Clone the repository, then:
 open GottaGo/iOS/GottaGo.xcodeproj
 ```
 
-In the Project Navigator, select the GottaGo project (not the folder), go to the GottaGo target's **Signing & Capabilities**, and set **Team** to your own Apple ID — a free account is enough for simulator and personal-device testing.
+In the Project Navigator, select the GottaGo project (not the folder), go to the GottaGo target's **Signing & Capabilities**, and set **Team** to your own Apple ID. A free account is enough for simulator and personal-device testing.
 
-For the simulator, pick an iOS 17+ device (iPhone 17 Pro or similar) and press ⌘R. For a real device, plug it in over USB, trust the computer, select it from the toolbar, and press ⌘R — Xcode handles signing and installation. On the phone, you'll need to go to Settings → General → VPN & Device Management and trust the developer certificate before it'll launch.
+For the simulator, pick an iOS 17+ device (iPhone 17 Pro or similar) and press ⌘R. For a real device, plug it in over USB, trust the computer, select it from the toolbar, and press ⌘R. Xcode handles signing and installation. On the phone, you'll need to go to Settings → General → VPN & Device Management and trust the developer certificate before it'll launch.
 
 ## Sideloading without a Mac
 
 Three free options for getting the `.ipa` onto your phone without building it yourself:
 
-**AltStore** — install AltStore on a PC or Mac, connect your iPhone over USB, grab the GottaGo `.ipa` from the Releases page, and import it from AltStore's `+` button. It re-signs the certificate automatically every 7 days (or use AltServer/AltStore PAL on a Mac for no expiration at all).
+**AltStore**: install AltStore on a PC or Mac, connect your iPhone over USB, grab the GottaGo `.ipa` from the Releases page, and import it from AltStore's `+` button. It re-signs the certificate automatically every 7 days (or use AltServer/AltStore PAL on a Mac for no expiration at all).
 
-**SideStore** — same 7-day refresh model as AltStore, but works over Wi-Fi once you've done the initial setup.
+**SideStore**: same 7-day refresh model as AltStore, but works over Wi-Fi once you've done the initial setup.
 
-**Sideloadly** — download it for Windows or macOS, connect your iPhone, drag the `.ipa` in, sign in with your Apple ID, and trust the resulting certificate under Settings → VPN & Device Management.
+**Sideloadly**: download it for Windows or macOS, connect your iPhone, drag the `.ipa` in, sign in with your Apple ID, and trust the resulting certificate under Settings → VPN & Device Management.
 
 Free Apple IDs cap you at 3 sideloaded apps at a time, and they expire after 7 days and need re-signing. A paid developer account ($99/year) removes both limits.
 
@@ -98,11 +98,11 @@ Rebuild and you're done.
 | Component | Technology |
 |-----------|-----------|
 | UI | SwiftUI (iOS 17+) |
-| Map | MapKit — `Map`, `Annotation`, `MapPolyline`, `MapStyle` |
+| Map | MapKit: `Map`, `Annotation`, `MapPolyline`, `MapStyle` |
 | Location | CoreLocation / `CLLocationManager` |
 | Networking | `URLSession` with async/await |
 | Storage | `UserDefaults` plus `NSUbiquitousKeyValueStore` for iCloud |
-| Concurrency | Swift structured concurrency — `async let`, `Task`, `@MainActor` |
+| Concurrency | Swift structured concurrency: `async let`, `Task`, `@MainActor` |
 | Architecture | MVVM (`ObservableObject` + `@EnvironmentObject`) |
 
 ## Data licensing
@@ -111,7 +111,7 @@ OpenStreetMap data is © OpenStreetMap contributors under [ODbL](https://www.ope
 
 ## Contributing
 
-Pull requests are welcome — for anything big, open an issue first so we're on the same page before you put the work in.
+Pull requests are welcome. For anything big, open an issue first so we're on the same page before you put the work in.
 
 ## License
 
