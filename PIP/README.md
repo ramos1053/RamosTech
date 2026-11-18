@@ -2,6 +2,10 @@
 
 A high-performance macOS text editor built for bash scripting and multi-language programming work, written in modern Swift and tuned to stay fast on large files.
 
+## Download
+
+Download `PIP-1.0.dmg` from the [PIP 1.0 release](https://github.com/ramos1053/RamosTech/releases/tag/pip-v1.0), open it and drag PIP to Applications. You can also build it from source with Xcode, as described below.
+
 ## Core text engine
 
 Text storage is a piece table with O(log n) insertion and deletion, so editing stays fast even on large documents. Undo/redo is command-based and coalesces edits within a 500ms window rather than recording every keystroke, with full transaction support for grouping complex operations. Parsing and I/O run in the background via Swift concurrency (async/await and actors), and files up to 100MB and beyond are handled through streaming I/O rather than loading everything into memory at once.
